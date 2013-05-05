@@ -128,9 +128,13 @@ pub fn decompress(in: &mut BitReader) -> Result<~[u8],~DeflateError> {
                 Err(err) => return Err(err)
               };
 
-            for len.times {
-              let byte = out[out.len() - dist];
-              out.push(byte);
+            if out.len() >= dist {
+              for len.times {
+                let byte = out[out.len() - dist];
+                out.push(byte);
+              }
+            } else {
+              return Err(~DistanceTooLong(out.len(), dist))
             }
           }
         }
@@ -318,7 +322,15 @@ mod test {
 #[test]
   fn test_decompress_fixed_errors() {
     /* the distance is too long (points before the start of input) */
-    // TODO
+    let mut reader1 = BitReader::new(~[
+      0b1110_0011, 0b0001_0010, 0b0000_0011,
+      0b0001_0010, 0b0000_0000]);
+
+    match decompress(reader1) {
+      Err(~DistanceTooLong(2, 8)) => { /* ok */ },
+      Err(err) => fail!(fmt!("got error %s", err.to_str())),
+      _ => fail!(~"expected error")
+    }
   }
 
 #[test]
