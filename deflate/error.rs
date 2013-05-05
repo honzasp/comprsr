@@ -4,7 +4,9 @@ pub enum DeflateError {
   TooManyHuffCodesError(uint),
   MissingHuffCodesError(uint),
   LengthMismatchError(u16, u16),
-  UnexpectedEOFError
+  UnexpectedEOFError,
+  BadLengthCode(u16),
+  BadDistCode(u16)
 }
 
 impl ToStr for DeflateError {
@@ -18,7 +20,11 @@ impl ToStr for DeflateError {
         fmt!("Mismatch between length %016s and its inverse %016s",
           len.to_str_radix(2), nlen.to_str_radix(2)),
       UnexpectedEOFError =>
-        fmt!("Unexpected end of input")
+        fmt!("Unexpected end of input"),
+      BadLengthCode(c) =>
+        fmt!("Bad length code %u", c as uint),
+      BadDistCode(c) =>
+        fmt!("Bad distance code %u", c as uint)
     }
   }
 }

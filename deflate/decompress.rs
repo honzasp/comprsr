@@ -2,7 +2,7 @@ use deflate::bit_reader::{BitReader};
 use deflate::huffman_tree::{HuffmanTree};
 use deflate::error::*;
 
-pub fn read_code(in: &mut BitReader, tree: &HuffmanTree) -> u16 {
+pub fn read_huff_code(in: &mut BitReader, tree: &HuffmanTree) -> u16 {
   let mut node = tree.root();
   while !tree.is_leaf(node) {
     node = if in.read_bit() == 0 {
@@ -50,24 +50,24 @@ pub fn read_fix_code(in: &mut BitReader) -> u16 {
   }
 }
 
-pub fn read_length(in: &mut BitReader, code: u16) -> uint {
+pub fn read_length(in: &mut BitReader, code: u16) -> Result<uint,~DeflateError> {
   if code <= 264 {
-    code as uint - 254
+    Ok(code as uint - 254)
   } else if code < 285 {
     let rel = code as uint - 261;
     let extra = rel/4;
     let base: uint = (1<<(extra+2))+3+(rel%4)*(1<<extra);
-    base + in.read_bits(extra) as uint
+    Ok(base + in.read_bits(extra) as uint)
   } else if code == 285 {
-    258
+    Ok(258)
   } else {
-    fail!(fmt!("read_length() got unknown length code %u", code as uint));
+    Err(~BadLengthCode(code))
   }
 }
 
-pub fn read_dist(in: &mut BitReader, code: u16) -> uint {
+pub fn read_dist(in: &mut BitReader, code: u16) -> Result<uint,~DeflateError> {
   if code < 4 {
-    code as uint + 1 
+    Ok(code as uint + 1)
   } else if code <= 29 {
     let extra: uint = (code-2)/2 as uint; 
     let base = if code % 2 == 0 {
@@ -75,10 +75,9 @@ pub fn read_dist(in: &mut BitReader, code: u16) -> uint {
     } else {
       1+3*(1<<extra)
     };
-    base + in.read_bits(extra) as uint
+    Ok(base + in.read_bits(extra) as uint)
   } else {
-    // TODO: return an error?
-    fail!(~"unexpected");
+    Err(~BadDistCode(code))
   }
 }
 
@@ -118,10 +117,16 @@ pub fn decompress(in: &mut BitReader) -> Result<~[u8],~DeflateError> {
           } else if code == 256 {
             break
           } else {
-            let len = read_length(in, code) as uint;
+            let len = match read_length(in, code) {
+                Ok(len) => len,
+                Err(err) => return Err(err)
+              };
 
             let dist_code = in.read_rev_bits(5);
-            let dist = read_dist(in, dist_code);
+            let dist = match read_dist(in, dist_code) {
+                Ok(dist) => dist,
+                Err(err) => return Err(err)
+              };
 
             for len.times {
               let byte = out[out.len() - dist];
@@ -146,14 +151,14 @@ pub fn decompress(in: &mut BitReader) -> Result<~[u8],~DeflateError> {
 #[cfg(test)]
 
 mod test {
-  use deflate::decompress::{read_code, read_length, read_dist, read_fix_code,
+  use deflate::decompress::{read_huff_code, read_length, read_dist, read_fix_code,
   decompress};
   use deflate::huffman_tree::{from_bit_lengths};
   use deflate::bit_reader::{BitReader};
   use deflate::error::*;
 
 #[test]
-  fn test_read_code() {
+  fn test_read_huff_code() {
     let (a,b,c,d,e,_f) = (0,1,2,3,4,5);
     let tree = from_bit_lengths(~[2,2,3,3,3,3]).unwrap();
 
@@ -169,12 +174,12 @@ mod test {
     let mut reader = BitReader::new(~[
       0b1000_0100, 0b0100_1110, 0b1000_0101 ]);
 
-    assert_eq!(read_code(reader, tree), a);
-    assert_eq!(read_code(reader, tree), c);
-    assert_eq!(read_code(reader, tree), a);
-    assert_eq!(read_code(reader, tree), d);
-    assert_eq!(read_code(reader, tree), e);
-    assert_eq!(read_code(reader, tree), b);
+    assert_eq!(read_huff_code(reader, tree), a);
+    assert_eq!(read_huff_code(reader, tree), c);
+    assert_eq!(read_huff_code(reader, tree), a);
+    assert_eq!(read_huff_code(reader, tree), d);
+    assert_eq!(read_huff_code(reader, tree), e);
+    assert_eq!(read_huff_code(reader, tree), b);
 
     assert_eq!(reader.read_bits(9), 0b1000_0101_0);
   }
@@ -320,35 +325,48 @@ mod test {
   fn test_read_length() {
     /* small and simple */
     let mut reader1 = BitReader::new(~[]);
-    assert_eq!(read_length(reader1, 259), 5);
-    assert_eq!(read_length(reader1, 263), 9);
+    assert_eq!(read_length(reader1, 259).unwrap(), 5);
+    assert_eq!(read_length(reader1, 263).unwrap(), 9);
 
     /* 3 extra bits */
     let mut reader2 = BitReader::new(~[0b110]);
-    assert_eq!(read_length(reader2, 274), 43+6);
+    assert_eq!(read_length(reader2, 274).unwrap(), 43+6);
 
     /* 5 extra bits */
     let mut reader5 = BitReader::new(~[0b10011]);
-    assert_eq!(read_length(reader5, 283), 195+19);
+    assert_eq!(read_length(reader5, 283).unwrap(), 195+19);
     
     /* special case - length 258 */
-    let mut reader6 = BitReader::new(~[]);
-    assert_eq!(read_length(reader6, 285), 258);
+    assert_eq!(read_length(reader1, 285).unwrap(), 258);
+
+    /* wrong code */
+    match read_length(reader1, 287) {
+      Err(~BadLengthCode(287)) => { /* ok */ },
+      Err(err) => fail!(fmt!("got error %s", err.to_str())),
+      _ => fail!(~"expected error")
+    }
   }
 
 #[test]
   fn test_read_dist() {
     /* small and simple */
     let mut reader1 = BitReader::new(~[]);
-    assert_eq!(read_dist(reader1, 2), 3);
-    assert_eq!(read_dist(reader1, 0), 1);
+    assert_eq!(read_dist(reader1, 2).unwrap(), 3);
+    assert_eq!(read_dist(reader1, 0).unwrap(), 1);
 
     /* 2 extra bits */
     let mut reader2 = BitReader::new(~[0b10]);
-    assert_eq!(read_dist(reader2, 7), 13+2);
+    assert_eq!(read_dist(reader2, 7).unwrap(), 13+2);
 
     /* 10 extra bits */
     let mut reader3 = BitReader::new(~[0b11100001, 0b11]);
-    assert_eq!(read_dist(reader3, 23), 3073+993);
+    assert_eq!(read_dist(reader3, 23).unwrap(), 3073+993);
+
+    /* wrong code */
+    match read_dist(reader1, 30) {
+      Err(~BadDistCode(30)) => { /* ok */ },
+      Err(err) => fail!(fmt!("got error %s", err.to_str())),
+      _ => fail!(~"expected error")
+    }
   }
 }
