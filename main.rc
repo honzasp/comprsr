@@ -1,0 +1,11 @@
+#[link(name = "png")]
+
+mod deflate {
+  mod bit_reader;
+  mod huffman_tree;
+  mod decompress;
+  mod error;
+}
+
+fn main() {
+}
