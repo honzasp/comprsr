@@ -82,6 +82,66 @@ pub fn read_dist(in: &mut BitReader, code: u16) -> Result<uint,~DeflateError> {
 }
 
 pub fn decompress(in: &mut BitReader) -> Result<~[u8],~DeflateError> {
+  fn non_compressed_block(in: &mut BitReader, out: &mut ~[u8])
+    -> Option<~DeflateError> 
+  {
+    in.flush_byte();
+
+    let lsb = in.read_byte();
+    let msb = in.read_byte();
+    let nlsb = in.read_byte();
+    let nmsb = in.read_byte();
+
+    let len: u16 = lsb as u16 | (msb as u16 << 8);
+    let nlen: u16 = nlsb as u16 | (nmsb as u16 << 8);
+
+    if len == !nlen {
+      for (len as uint).times {
+        vec::push(out, in.read_byte());
+      }
+    } else {
+      return Some(~LengthMismatchError(len as u16, nlen as u16))
+    }
+
+    None
+  }
+
+  fn fixed_compressed_block(in: &mut BitReader, out: &mut ~[u8])
+    -> Option<~DeflateError>
+  {
+    loop {
+      let code = read_fix_code(in);
+
+      if code < 256 {
+        out.push(code as u8)
+      } else if code == 256 {
+        break
+      } else {
+        let len = match read_length(in, code) {
+            Ok(len) => len,
+            Err(err) => return Some(err)
+          };
+
+        let dist_code = in.read_rev_bits(5);
+        let dist = match read_dist(in, dist_code) {
+            Ok(dist) => dist,
+            Err(err) => return Some(err)
+          };
+
+        if out.len() >= dist {
+          for len.times {
+            let byte = out[out.len() - dist];
+            out.push(byte);
+          }
+        } else {
+          return Some(~DistanceTooLong(out.len(), dist))
+        }
+      }
+    }
+
+    None
+  }
+
   let mut out: ~[u8] = ~[];
 
   loop {
@@ -89,56 +149,12 @@ pub fn decompress(in: &mut BitReader) -> Result<~[u8],~DeflateError> {
     let btype = in.read_bits(2);
 
     match btype {
-      0b00 => {
-        in.flush_byte();
-
-        let lsb = in.read_byte();
-        let msb = in.read_byte();
-        let nlsb = in.read_byte();
-        let nmsb = in.read_byte();
-
-        let len: u16 = lsb as u16 | (msb as u16 << 8);
-        let nlen: u16 = nlsb as u16 | (nmsb as u16 << 8);
-
-        if len == !nlen {
-          for (len as uint).times {
-            out.push(in.read_byte());
-          }
-        } else {
-          return Err(~LengthMismatchError(len as u16, nlen as u16))
-        }
-      },
-      0b01 => {
-        loop {
-          let code = read_fix_code(in);
-
-          if code < 256 {
-            out.push(code as u8)
-          } else if code == 256 {
-            break
-          } else {
-            let len = match read_length(in, code) {
-                Ok(len) => len,
-                Err(err) => return Err(err)
-              };
-
-            let dist_code = in.read_rev_bits(5);
-            let dist = match read_dist(in, dist_code) {
-                Ok(dist) => dist,
-                Err(err) => return Err(err)
-              };
-
-            if out.len() >= dist {
-              for len.times {
-                let byte = out[out.len() - dist];
-                out.push(byte);
-              }
-            } else {
-              return Err(~DistanceTooLong(out.len(), dist))
-            }
-          }
-        }
-      },
+      0b00 => match non_compressed_block(in, &mut out) {
+          Some(err) => return Err(err), _ => { }
+        },
+      0b01 => match fixed_compressed_block(in, &mut out) {
+          Some(err) => return Err(err), _ => { }
+        },
       _ => fail!(~"ouch")
     }
 
