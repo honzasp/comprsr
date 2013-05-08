@@ -51,7 +51,6 @@ pub fn read_meta_tree(in: &mut BitReader, count: uint)
 pub fn read_huff_tree(in: &mut BitReader, meta_tree: &HuffmanTree,
   symbol_count: uint) -> Result<~HuffmanTree,~DeflateError>
 {
-
   let mut bitlens: ~[u8] = ~[];
   vec::grow(&mut bitlens, symbol_count, &0);
 
@@ -64,20 +63,27 @@ pub fn read_huff_tree(in: &mut BitReader, meta_tree: &HuffmanTree,
       symbol = symbol + 1;
     } else {
       let (repeat,value) = match code {
-          // TODO: what if it's the first?
-          // TODO: what if the repeat is too long? (over bitlens[])
-          16 => (3 + in.read_bits(2) as uint, bitlens[symbol - 1]),
+          16 => if symbol > 0 {
+              (3 + in.read_bits(2) as uint, bitlens[symbol - 1])
+            } else { return Err(~MetaRepeatAtStart) },
           17 => (3 + in.read_bits(3) as uint, 0),
           18 => (11 + in.read_bits(7) as uint, 0),
-          _  => fail!(fmt!("read_litlen_tree() read invalid meta code %u",
-            code as uint))
+          _  => if code == HuffmanTree::undefined() {
+              return Err(~MetaUndefinedCode)
+            } else {
+              fail!(fmt!("read_huff_tree() read invalid meta code %u", code as uint))
+            }
         };
 
-      for uint::range(symbol, symbol + repeat) |i| {
-        bitlens[i] = value;
-      }
+      if symbol + repeat <= bitlens.len() {
+        for uint::range(symbol, symbol + repeat) |i| {
+          bitlens[i] = value;
+        }
 
-      symbol = symbol + repeat;
+        symbol = symbol + repeat;
+      } else {
+        return Err(~MetaRepeatTooLong(repeat, bitlens.len() - symbol));
+      }
     }
   }
 
@@ -89,6 +95,36 @@ mod test {
   use deflate::decompress::dynamic::{read_huff_tree, read_meta_tree};
   use deflate::bit_reader::{BitReader};
   use deflate::huffman_tree::{HuffmanTree};
+  use deflate::error::*;
+
+  #[test]
+  fn test_read_meta_tree() {
+    /*
+        .  
+       / \--
+      /     \
+     .       .
+    / \     / \
+   0   9  17   .
+              / \
+             7   12
+
+    code 16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15
+    len   0  2  0 2 0 3 2 0  0 0  0 0  3 ...
+    */
+
+    let mut reader1 = BitReader::new(~[
+      0b0001_0000, 0b1000_0100, 0b0000_1001,
+      0b0000_0000, 0b0011_0000]);
+
+    let t1 = read_meta_tree(reader1, 13).unwrap();
+    let n00 = t1.zero_child(t1.zero_child(t1.root()));
+    let n1 = t1.one_child(t1.root());
+
+    assert_eq!(t1.leaf_value(n00), 0);
+    assert_eq!(t1.leaf_value(t1.zero_child(n1)), 17);
+    assert_eq!(t1.leaf_value(t1.one_child(t1.one_child(n1))), 12);
+  }
 
   #[test]
   fn test_read_huff_tree() {
@@ -160,31 +196,40 @@ mod test {
   }
 
   #[test]
-  fn test_read_meta_tree() {
-    /*
-        .  
-       / \--
-      /     \
-     .       .
-    / \     / \
-   0   9  17   .
-              / \
-             7   12
-
-    code 16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15
-    len   0  2  0 2 0 3 2 0  0 0  0 0  3 ...
+  fn test_read_huff_tree_errors() {
+    /* the meta alphabet:
+      0   00
+      16  01
+      3   100
+      15  101
+      18  110
+      ??  111 (undefined)
     */
+    let meta_tree = HuffmanTree::from_bit_lengths(~[
+      2,0,0,3,0,0,0,0,0,0,0,0,0,0,0,3,2,0,3]).unwrap();
 
-    let mut reader1 = BitReader::new(~[
-      0b0001_0000, 0b1000_0100, 0b0000_1001,
-      0b0000_0000, 0b0011_0000]);
+    /* error 1: the first metacode is 16 (copying the previous code) */
+    let mut reader1 = BitReader::new(~[0b10]);
+    match read_huff_tree(reader1, meta_tree, 260) {
+      Err(~MetaRepeatAtStart) => { },
+      Err(err) => fail!(fmt!("unexpected %s", err.to_str())),
+      Ok(_) => fail!(~"expected an error")
+    }
 
-    let t1 = read_meta_tree(reader1, 13).unwrap();
-    let n00 = t1.zero_child(t1.zero_child(t1.root()));
-    let n1 = t1.one_child(t1.root());
-
-    assert_eq!(t1.leaf_value(n00), 0);
-    assert_eq!(t1.leaf_value(t1.zero_child(n1)), 17);
-    assert_eq!(t1.leaf_value(t1.one_child(t1.one_child(n1))), 12);
+    /* error 2: repeat too long */
+    let mut reader2 = BitReader::new(~[0b1111_1011, 0b1000_1111, 0b0000_1111]);
+    match read_huff_tree(reader2, meta_tree, 263) {
+      Err(~MetaRepeatTooLong(135, 125)) => { },
+      Err(err) => fail!(fmt!("unexpected %s", err.to_str())),
+      Ok(_) => fail!(~"expected an error")
+    }
+    
+    /* error 3: undefined meta code */
+    let mut reader3 = BitReader::new(~[0b111001]);
+    match read_huff_tree(reader3, meta_tree, 261) {
+      Err(~MetaUndefinedCode) => { },
+      Err(err) => fail!(fmt!("unexpected %s", err.to_str())),
+      Ok(_) => fail!(~"expected an error")
+    }
   }
 }

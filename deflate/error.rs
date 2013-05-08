@@ -7,7 +7,10 @@ pub enum DeflateError {
   UnexpectedEOFError,
   DistanceTooLong(uint, uint),
   BadLengthCode(u16),
-  BadDistCode(u16)
+  BadDistCode(u16),
+  MetaRepeatAtStart,
+  MetaRepeatTooLong(uint, uint),
+  MetaUndefinedCode,
 }
 
 impl ToStr for DeflateError {
@@ -27,7 +30,13 @@ impl ToStr for DeflateError {
       BadLengthCode(c) =>
         fmt!("Bad length code %u", c as uint),
       BadDistCode(c) =>
-        fmt!("Bad distance code %u", c as uint)
+        fmt!("Bad distance code %u", c as uint),
+      MetaRepeatAtStart =>
+        fmt!("Meta repeat symbol (16) at the start of the sequence"),
+      MetaRepeatTooLong(actual, max) =>
+        fmt!("Meta repeat too long (%u, maximum was %u)", actual, max),
+      MetaUndefinedCode =>
+        fmt!("Undefined meta code"),
     }
   }
 }
