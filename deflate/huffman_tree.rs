@@ -11,19 +11,25 @@ impl HuffmanTree {
   }
 
   pub fn is_leaf(&self, n: HuffmanNode) -> bool {
-    self.nodes[n] == 0
+    self.nodes[n] & 0b1 == 1
   }
 
   pub fn leaf_value(&self, n: HuffmanNode) -> u16 {
-    self.nodes[n+1]
+    self.nodes[n] >> 1
   }
 
   pub fn zero_child(&self, n: HuffmanNode) -> HuffmanNode {
-    self.nodes[n]
+    self.nodes[n] >> 1
   }
 
   pub fn one_child(&self, n: HuffmanNode) -> HuffmanNode {
-    self.nodes[n+1]
+    (self.nodes[n] >> 1) + 1
+  }
+
+  pub fn undefined() -> u16 { 0xffff >> 1 }
+
+  pub fn is_defined(&self, n: HuffmanNode) -> bool {
+    self.nodes[n] != 0xffff
   }
 
   pub fn from_bit_lengths(bit_lengths: &[u8])
@@ -46,7 +52,7 @@ impl HuffmanTree {
       }
     }
 
-    let mut nodes: ~[u16] = ~[0xdead, 0xdead];
+    let mut nodes: ~[u16] = ~[0xffff];
     let mut front: ~[u16] = ~[0];
     let mut front_offset: uint = 0;
 
@@ -56,11 +62,10 @@ impl HuffmanTree {
       for uint::range(front_offset, front.len()) |i| {
         let front_n: u16 = front[i];
         let zero_n: u16 = nodes.len() as u16;
-        let one_n: u16 = zero_n + 2;
-        nodes[front_n] = zero_n;
-        nodes[front_n+1] = one_n;
+        let one_n: u16 = zero_n + 1;
+        nodes[front_n] = zero_n << 1;
 
-        vec::grow(&mut nodes, 4, &0xdead);
+        vec::grow(&mut nodes, 2, &0xffff);
         new_front.push(zero_n);
         new_front.push(one_n);
       }
@@ -71,21 +76,16 @@ impl HuffmanTree {
       if bl_syms[level].len() <= front.len() {
         for bl_syms[level].each |&sym| {
           let sym_n = front[front_offset];
-          nodes[sym_n] = 0;
-          nodes[sym_n+1] = sym;
+          nodes[sym_n] = (sym << 1) | 0b1;
 
-          front_offset += 1;
+          front_offset = front_offset + 1;
         }
       } else {
         return Err(~TooManyHuffCodesError(level));
       }
     }
 
-    if front_offset >= front.len() {
-      Ok(~HuffmanTree { nodes: nodes })
-    } else {
-      Err(~MissingHuffCodesError(max_bl))
-    }
+    Ok(~HuffmanTree { nodes: nodes })
   }
 }
 
@@ -93,35 +93,6 @@ impl HuffmanTree {
 mod test {
   use deflate::huffman_tree::*;
   use deflate::error::*;
-
-  #[test]
-  fn test_huffman_tree() {
-    let a = 10, b = 20, c = 100, d = 42, e = 70, f = 333;
-    let tree = HuffmanTree { nodes: ~[
-      2, 8, 4, 6, 0, a, 0, b, 10, 16, 12, 14, 0, c, 0, d, 18, 20, 0, e, 0, f
-    ]};
-
-    let n = tree.root();
-    assert!(!tree.is_leaf(n));
-
-    let n0 = tree.zero_child(n);
-    assert!(!tree.is_leaf(n0));
-
-    let n00 = tree.zero_child(n0);
-    assert!(tree.is_leaf(n00));
-    assert_eq!(tree.leaf_value(n00), a);
-
-    let n01 = tree.one_child(n0);
-    assert!(tree.is_leaf(n01));
-    assert_eq!(tree.leaf_value(n01), b);
-
-    let n10 = tree.zero_child(tree.one_child(n));
-    assert!(!tree.is_leaf(n10));
-
-    let n101 = tree.one_child(n10);
-    assert!(tree.is_leaf(n101));
-    assert_eq!(tree.leaf_value(n101), d);
-  }
 
   #[test]
   fn test_tree_from_bit_lengths() {
@@ -183,12 +154,29 @@ mod test {
       Err(err) => fail!(fmt!("expected TooManyHuffCodesError, got %s", err.to_str())),
       Ok(_) => fail!(~"expected an error")
     }
+  }
 
-    /* not all 4 codes are used */
-    match HuffmanTree::from_bit_lengths(~[3,3,3,4,3,3,4,3]) {
-      Err(~MissingHuffCodesError(4)) => { /* ok */ },
-      Err(err) => fail!(fmt!("expected MissingHuffCodesError, got %s", err.to_str())),
-      Ok(_) => fail!(~"expected an error")
-    }
+  #[test]
+  fn test_unsaturated_tree() {
+    /* two 3-bit codes aren't defined:
+          .        
+         / \       
+        /   \      
+       .     .     
+      / \   / \    
+     2   3 /   \   
+          .     .  
+         / \   / \ 
+        0   1 ?   ?
+      */
+
+    let tree = HuffmanTree::from_bit_lengths(~[3,3,2,2]).unwrap();
+
+    let n01 = tree.one_child(tree.zero_child(tree.root()));
+    assert!(tree.is_defined(n01));
+
+    let n110 = tree.zero_child(tree.one_child(tree.one_child(tree.root())));
+    assert!(!tree.is_defined(n110));
+    assert_eq!(tree.leaf_value(n110), HuffmanTree::undefined());
   }
 }
