@@ -25,65 +25,67 @@ impl HuffmanTree {
   pub fn one_child(&self, n: HuffmanNode) -> HuffmanNode {
     self.nodes[n+1]
   }
-}
 
-pub fn from_bit_lengths(bit_lengths: &[u8]) -> Result<~HuffmanTree,~DeflateError> {
-  let mut bl_count: ~[int] = ~[0];
-  let mut bl_syms: ~[~[u16]] = ~[~[]];
-  let mut max_bl: uint = 0;
+  pub fn from_bit_lengths(bit_lengths: &[u8])
+    -> Result<~HuffmanTree,~DeflateError> 
+  {
+    let mut bl_count: ~[int] = ~[0];
+    let mut bl_syms: ~[~[u16]] = ~[~[]];
+    let mut max_bl: uint = 0;
 
-  for vec::eachi(bit_lengths) |sym, bl_ref| {
-    let bl = *bl_ref as uint;
-    if bl > 0 {
-      if bl > max_bl {
-        vec::grow(&mut bl_count, bl - max_bl, &0);
-        vec::grow(&mut bl_syms, bl - max_bl, &~[]);
-        max_bl = bl;
+    for vec::eachi(bit_lengths) |sym, bl_ref| {
+      let bl = *bl_ref as uint;
+      if bl > 0 {
+        if bl > max_bl {
+          vec::grow(&mut bl_count, bl - max_bl, &0);
+          vec::grow(&mut bl_syms, bl - max_bl, &~[]);
+          max_bl = bl;
+        }
+        bl_count[bl] += 1;
+        bl_syms[bl].push(sym as u16);
       }
-      bl_count[bl] += 1;
-      bl_syms[bl].push(sym as u16);
-    }
-  }
-
-  let mut nodes: ~[u16] = ~[0xdead, 0xdead];
-  let mut front: ~[u16] = ~[0];
-  let mut front_offset: uint = 0;
-
-  for uint::range(1, max_bl+1) |level| {
-    let mut new_front: ~[u16] = ~[];
-
-    for uint::range(front_offset, front.len()) |i| {
-      let front_n: u16 = front[i];
-      let zero_n: u16 = nodes.len() as u16;
-      let one_n: u16 = zero_n + 2;
-      nodes[front_n] = zero_n;
-      nodes[front_n+1] = one_n;
-
-      vec::grow(&mut nodes, 4, &0xdead);
-      new_front.push(zero_n);
-      new_front.push(one_n);
     }
 
-    front = new_front;
-    front_offset = 0;
+    let mut nodes: ~[u16] = ~[0xdead, 0xdead];
+    let mut front: ~[u16] = ~[0];
+    let mut front_offset: uint = 0;
 
-    if bl_syms[level].len() <= front.len() {
-      for bl_syms[level].each |&sym| {
-        let sym_n = front[front_offset];
-        nodes[sym_n] = 0;
-        nodes[sym_n+1] = sym;
+    for uint::range(1, max_bl+1) |level| {
+      let mut new_front: ~[u16] = ~[];
 
-        front_offset += 1;
+      for uint::range(front_offset, front.len()) |i| {
+        let front_n: u16 = front[i];
+        let zero_n: u16 = nodes.len() as u16;
+        let one_n: u16 = zero_n + 2;
+        nodes[front_n] = zero_n;
+        nodes[front_n+1] = one_n;
+
+        vec::grow(&mut nodes, 4, &0xdead);
+        new_front.push(zero_n);
+        new_front.push(one_n);
       }
+
+      front = new_front;
+      front_offset = 0;
+
+      if bl_syms[level].len() <= front.len() {
+        for bl_syms[level].each |&sym| {
+          let sym_n = front[front_offset];
+          nodes[sym_n] = 0;
+          nodes[sym_n+1] = sym;
+
+          front_offset += 1;
+        }
+      } else {
+        return Err(~TooManyHuffCodesError(level));
+      }
+    }
+
+    if front_offset >= front.len() {
+      Ok(~HuffmanTree { nodes: nodes })
     } else {
-      return Err(~TooManyHuffCodesError(level));
+      Err(~MissingHuffCodesError(max_bl))
     }
-  }
-
-  if front_offset >= front.len() {
-    Ok(~HuffmanTree { nodes: nodes })
-  } else {
-    Err(~MissingHuffCodesError(max_bl))
   }
 }
 
@@ -92,7 +94,7 @@ mod test {
   use deflate::huffman_tree::*;
   use deflate::error::*;
 
-#[test]
+  #[test]
   fn test_huffman_tree() {
     let a = 10, b = 20, c = 100, d = 42, e = 70, f = 333;
     let tree = HuffmanTree { nodes: ~[
@@ -121,7 +123,7 @@ mod test {
     assert_eq!(tree.leaf_value(n101), d);
   }
 
-#[test]
+  #[test]
   fn test_tree_from_bit_lengths() {
     // example from RFC 1951 with zero-length codes 
 
@@ -152,7 +154,7 @@ mod test {
                         G   H
      */
 
-    let tree = from_bit_lengths(bit_lengths).unwrap();
+    let tree = HuffmanTree::from_bit_lengths(bit_lengths).unwrap();
 
     let n00 = tree.zero_child(tree.zero_child(tree.root()));
     assert!(tree.is_leaf(n00));
@@ -173,17 +175,17 @@ mod test {
     assert_eq!(tree.leaf_value(n1110), g);
   }
 
-#[test]
+  #[test]
   fn test_tree_from_invalid_bit_lengths() {
     /* too many 2's */
-    match from_bit_lengths(~[2,2,0,3,3,3,2,0]) {
+    match HuffmanTree::from_bit_lengths(~[2,2,0,3,3,3,2,0]) {
       Err(~TooManyHuffCodesError(3)) => { /* ok */ },
       Err(err) => fail!(fmt!("expected TooManyHuffCodesError, got %s", err.to_str())),
       Ok(_) => fail!(~"expected an error")
     }
 
     /* not all 4 codes are used */
-    match from_bit_lengths(~[3,3,3,4,3,3,4,3]) {
+    match HuffmanTree::from_bit_lengths(~[3,3,3,4,3,3,4,3]) {
       Err(~MissingHuffCodesError(4)) => { /* ok */ },
       Err(err) => fail!(fmt!("expected MissingHuffCodesError, got %s", err.to_str())),
       Ok(_) => fail!(~"expected an error")
