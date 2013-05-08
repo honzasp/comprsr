@@ -2,7 +2,7 @@ use deflate::huffman_tree::{HuffmanTree};
 use deflate::error::*;
 use deflate::bit_reader::{BitReader};
 
-use deflate::decompress::compressed::{read_length, read_dist, read_huff_code};
+use deflate::decompress::compressed::{read_huff_code, compressed_block};
 
 pub fn dynamic_compressed_block(in: &mut BitReader, out: &mut ~[u8])
   -> Option<~DeflateError>
@@ -26,39 +26,10 @@ pub fn dynamic_compressed_block(in: &mut BitReader, out: &mut ~[u8])
       Err(err) => return Some(err)
     };
 
-  loop {
-    let litlen = read_huff_code(in, litlen_tree);
-
-    // TODO: lot of duplication!
-
-    if litlen < 256 {
-      out.push(litlen as u8)
-    } else if litlen == 256 {
-      break
-    } else {
-      let len = match read_length(in, litlen) {
-          Ok(len) => len,
-          Err(err) => return Some(err)
-        };
-
-      let dist_code = read_huff_code(in, dist_tree);
-      let dist = match read_dist(in, dist_code) {
-          Ok(dist) => dist,
-          Err(err) => return Some(err)
-        };
-
-      if out.len() >= dist {
-        for len.times {
-          let byte = out[out.len() - dist];
-          out.push(byte);
-        }
-      } else {
-        return Some(~DistanceTooLong(out.len(), dist))
-      }
-    }
-  }
-
-  None
+  compressed_block(in, out,
+      |in| read_huff_code(in, litlen_tree),
+      |in| read_huff_code(in, dist_tree)
+    )
 }
 
 pub fn read_meta_tree(in: &mut BitReader, count: uint) 

@@ -1,42 +1,15 @@
 use deflate::error::*;
 use deflate::bit_reader::{BitReader};
 
-use deflate::decompress::compressed::{read_length, read_dist};
+use deflate::decompress::compressed::{compressed_block};
 
 pub fn fixed_compressed_block(in: &mut BitReader, out: &mut ~[u8])
   -> Option<~DeflateError>
 {
-  loop {
-    let litlen = read_fix_code(in);
-
-    if litlen < 256 {
-      out.push(litlen as u8)
-    } else if litlen == 256 {
-      break
-    } else {
-      let len = match read_length(in, litlen) {
-          Ok(len) => len,
-          Err(err) => return Some(err)
-        };
-
-      let dist_code = in.read_rev_bits(5);
-      let dist = match read_dist(in, dist_code) {
-          Ok(dist) => dist,
-          Err(err) => return Some(err)
-        };
-
-      if out.len() >= dist {
-        for len.times {
-          let byte = out[out.len() - dist];
-          out.push(byte);
-        }
-      } else {
-        return Some(~DistanceTooLong(out.len(), dist))
-      }
-    }
-  }
-
-  None
+  compressed_block(in, out,
+      |in| read_fix_code(in),
+      |in| in.read_rev_bits(5)
+    )
 }
 
 pub fn read_fix_code(in: &mut BitReader) -> u16 {
