@@ -27,7 +27,7 @@ pub fn decompress(in: &mut BitReader) -> Result<~[u8],~DeflateError> {
       0b10 => match dynamic_compressed_block(in, &mut out) {
           Some(err) => return Err(err), _ => { }
         },
-      _ => fail!(~"ouch")
+      _ => return Err(~BadBlockType)
     }
 
     if bfinal != 0 {
@@ -183,5 +183,14 @@ mod test {
       1,4,3,1,0,0,0,2,4,4,2,1,2,2,0,2,3,2,2,1,2,0,1,3]);
   }
 
+  #[test]
+  fn test_decompress_bad_btype() {
+    let mut reader1 = BitReader::new(~[0b110]);
 
+    match decompress(reader1) {
+      Err(~BadBlockType) => { },
+      Err(err) => fail!(fmt!("unexpected %s", err.to_str())),
+      Ok(_) => fail!(~"expected an error")
+    }
+  }
 }
