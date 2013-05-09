@@ -7,5 +7,10 @@ mod deflate {
   mod error;
 }
 
+mod zlib {
+  mod decompress;
+  mod error;
+}
+
 fn main() {
 }
