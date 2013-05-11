@@ -17,8 +17,10 @@ pub fn decompress(in: ~[u8]) -> Result<~[u8],~ZlibError> {
     Err(~FlagsCorrupted)
   } else {
     let mut bit_reader = BitReader::new(vec::from_slice(in.slice(2, in.len() - 4)));
-    let data = deflate_decompress(bit_reader).unwrap();
-    Ok(data)
+    match deflate_decompress(bit_reader) {
+      Ok(data) => Ok(data),
+      Err(deflate_err) => Err(~DeflatingError(deflate_err))
+    }
   }
 }
 
@@ -26,6 +28,7 @@ pub fn decompress(in: ~[u8]) -> Result<~[u8],~ZlibError> {
 mod test {
   use zlib::decompress::{decompress};
   use zlib::error::*;
+  use deflate::error::*;
 
   #[test]
   fn test_decompress() {
@@ -55,6 +58,17 @@ mod test {
     let bytes3 = ~[0b0111_1000, 0b10_1_00110];
     match decompress(bytes3) {
       Err(~PresetDictionaryUsed) => { },
+      Err(err) => fail!(fmt!("unexpected %s", err.to_str())),
+      Ok(_) => fail!(~"expected an error")
+    }
+  }
+
+  #[test]
+  fn test_decompress_deflate_errors() {
+    /* bad deflate block */
+    let bytes1 = ~[120,156,0b110,0,0,0,0,0];
+    match decompress(bytes1) {
+      Err(~DeflatingError(~BadBlockType)) => { },
       Err(err) => fail!(fmt!("unexpected %s", err.to_str())),
       Ok(_) => fail!(~"expected an error")
     }

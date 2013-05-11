@@ -1,4 +1,5 @@
-#[link(name = "png")]
+#[link(name = "png", vers = "0.0")];
+#[crate_type = "lib"];
 
 mod deflate {
   mod bit_reader;
@@ -7,10 +8,7 @@ mod deflate {
   mod error;
 }
 
-mod zlib {
-  mod decompress;
+pub mod zlib {
+  pub mod decompress;
   mod error;
-}
-
-fn main() {
 }
