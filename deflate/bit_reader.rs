@@ -8,7 +8,7 @@ pub struct BitReader {
 impl BitReader {
   pub fn new(data: ~[u8]) -> ~BitReader {
     let buf = if data.len() >= 2 {
-        (data[0] as u32) | ((data[1] as u32) << 8)
+        (data[0] as u32) | (data[1] as u32 << 8)
       } else if data.len() >= 1 {
         data[0] as u32
       } else {
@@ -33,17 +33,24 @@ impl BitReader {
   }
 
   pub fn read_bits(&mut self, len: uint) -> u16 {
-    let bits = (self.buffer & !(!0 << len)) as u16;
-    self.buffer = self.buffer >> len;
-    self.bit_pos = self.bit_pos + len;
+    // TODO: this is just a quick hack!
+    if len > 8 {
+      let smaller = self.read_bits(8);
+      let higher = self.read_bits(len - 8);
+      (higher << 8) | smaller
+    } else {
+      let bits = (self.buffer & !(!0 << len)) as u16;
+      self.buffer = self.buffer >> len;
+      self.bit_pos = self.bit_pos + len;
 
-    while self.bit_pos >= 8 {
-      let next_byte = self.next_byte();
-      self.buffer = self.buffer | (next_byte as u32 << (16 - self.bit_pos));
-      self.bit_pos = self.bit_pos - 8;
+      while self.bit_pos >= 8 {
+        let next_byte = self.next_byte();
+        self.buffer = self.buffer | (next_byte as u32 << (16 - self.bit_pos));
+        self.bit_pos = self.bit_pos - 8;
+      }
+
+      bits
     }
-
-    bits
   }
 
   pub fn read_rev_bits(&mut self, len: uint) -> u16 {
@@ -83,7 +90,7 @@ impl BitReader {
 mod test {
   use deflate::bit_reader::*;
 
-#[test]
+  #[test]
   fn test_read_bit() {
     let mut reader = BitReader::new(~[
       0b0111_1000, 0b1001_1100, 0b0001_1101]);
@@ -120,7 +127,7 @@ mod test {
     }
   }
 
-#[test]
+  #[test]
   fn test_read_bits() {
     let mut reader = BitReader::new(~[
       0b0111_1000, 0b1001_1100, 0b0001_1101, 0b0101_1110]);
@@ -133,7 +140,17 @@ mod test {
     assert!(reader.read_bits(16) == 0b00000_0101_1110_000);
   }
 
-#[test]
+  #[test]
+  fn test_read_many_bits() {
+    let mut reader = BitReader::new(~[
+      0b1100_1010, 0b1001_0110, 0b0111_0100, 0b0100_1101]);
+
+    assert_eq!(reader.read_bits(7), 0b100_1010);
+    assert_eq!(reader.read_bits(15), 0b11_0100_1001_0110_1);
+    assert_eq!(reader.read_bits(6), 0b1101_01);
+  }
+
+  #[test]
   fn test_read_too_many_bits() {
     let mut reader = BitReader::new(~[
       0b0111_1000, 0b1001_1100, 0b0001_1101, 0b0101_1110]);
@@ -143,7 +160,7 @@ mod test {
     assert!(reader.read_bits(6) == 0b1_1110_0);
   }
 
-#[test]
+  #[test]
   fn test_flush_byte() {
     let mut reader = BitReader::new(~[
       0b0111_1000, 0b1001_1100, 0b0001_1101, 0b0101_1110, 0b1001_0011]);
@@ -164,7 +181,7 @@ mod test {
     }
   }
 
-#[test]
+  #[test]
   fn test_read_byte() {
     let mut reader = BitReader::new(~[
       0b1100_1010, 0b0111_0100, 0b1001_0111, 0b0110_1010]);
@@ -176,7 +193,7 @@ mod test {
     assert_eq!(reader.read_bits(3), 0b010);
   }
 
-#[test]
+  #[test]
   fn test_eof() {
     let mut reader = BitReader::new(~[
       0b1100_1010, 0b0111_0100, 0b1001_0111, 0b0110_1010]);
@@ -196,7 +213,7 @@ mod test {
     assert!(reader.eof());
   }
 
-#[test]
+  #[test]
   fn test_read_rev_bits() {
     let mut reader = BitReader::new(~[
       0b1100_1010, 0b1001_1110, 0b0101_0001]);
@@ -207,7 +224,7 @@ mod test {
     assert_eq!(reader.read_rev_bits(9), 0b0_1010_0000);
   }
 
-#[test]
+  #[test]
   fn test_empty_reader() {
     let mut empty_reader = BitReader::new(~[]);
 

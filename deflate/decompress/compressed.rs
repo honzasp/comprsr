@@ -171,6 +171,11 @@ mod test {
     assert_eq!(read_dist(reader5, 13).unwrap(), 97+18);
     assert_eq!(read_dist(reader5, 12).unwrap(), 65+1);
 
+    /* 7 extra bits */
+    let mut reader7 = BitReader::new(~[0b0_0000010, 0b000011]);
+    assert_eq!(read_dist(reader7, 17).unwrap(), 385+2);
+    assert_eq!(read_dist(reader7, 16).unwrap(), 257+6);
+
     /* 10 extra bits */
     let mut reader10 = BitReader::new(~[0b11100001, 0b11]);
     assert_eq!(read_dist(reader10, 23).unwrap(), 3073+993);

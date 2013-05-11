@@ -26,7 +26,11 @@ fn test_file(path: &Path) {
             if actual == expected {
               io::print(fmt!("%s: ok\n", path.filename().unwrap()));
             } else {
-              io::print(fmt!("%s: does not match\n", path.filename().unwrap()));
+              io::print(fmt!("%s: does not match (.err file generated)\n",
+                path.filename().unwrap()));
+              let err_path = &path.with_filetype(&"err");
+              io::file_writer(err_path, &[io::Create, io::Truncate])
+                .unwrap().write(actual);
             }
           },
           Err(err) => {

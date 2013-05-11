@@ -8,11 +8,13 @@ Dir.foreach test_path do |filename|
     STDOUT.flush
 
     zlib_file = "#{File.basename filename, ".out"}.zlib"
-    unless File.exists? zlib_file
+    zlib_path = File.join test_path, zlib_file
+    out_path = File.join test_path, filename
+    unless File.exists? zlib_path
       STDOUT.print "zlib... "
       STDOUT.flush
-      File.open zlib_file, "w" do |f|
-        f.write Zlib::Deflate.deflate(File.read filename)
+      File.open zlib_path, "w" do |f|
+        f.write Zlib::Deflate.deflate(File.read out_path)
       end
     end
 
