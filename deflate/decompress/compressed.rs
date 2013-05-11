@@ -74,7 +74,7 @@ pub fn read_dist(in: &mut BitReader, code: u16) -> Result<uint,~DeflateError> {
   } else if code <= 29 {
     let extra: uint = (code-2)/2 as uint; 
     let base = if code % 2 == 0 {
-      1+1<<(extra+1)
+      1+(1<<(extra+1))
     } else {
       1+3*(1<<extra)
     };
@@ -147,20 +147,36 @@ mod test {
   #[test]
   fn test_read_dist() {
     /* small and simple */
-    let mut reader1 = BitReader::new(~[]);
-    assert_eq!(read_dist(reader1, 2).unwrap(), 3);
-    assert_eq!(read_dist(reader1, 0).unwrap(), 1);
+    let mut reader0 = BitReader::new(~[]);
+    assert_eq!(read_dist(reader0, 2).unwrap(), 3);
+    assert_eq!(read_dist(reader0, 0).unwrap(), 1);
+
+    /* 1 extra bit */
+    let mut reader1 = BitReader::new(~[0b01]);
+    assert_eq!(read_dist(reader1, 4).unwrap(), 5+1);
+    assert_eq!(read_dist(reader1, 5).unwrap(), 7);
 
     /* 2 extra bits */
-    let mut reader2 = BitReader::new(~[0b10]);
+    let mut reader2 = BitReader::new(~[0b01_10]);
     assert_eq!(read_dist(reader2, 7).unwrap(), 13+2);
+    assert_eq!(read_dist(reader2, 6).unwrap(), 10);
+
+    /* 3 extra bits */
+    let mut reader3 = BitReader::new(~[0b000_100]);
+    assert_eq!(read_dist(reader3, 8).unwrap(), 17+4);
+    assert_eq!(read_dist(reader3, 9).unwrap(), 25);
+
+    /* 5 extra bits */
+    let mut reader5 = BitReader::new(~[0b001_10010, 0b00]);
+    assert_eq!(read_dist(reader5, 13).unwrap(), 97+18);
+    assert_eq!(read_dist(reader5, 12).unwrap(), 65+1);
 
     /* 10 extra bits */
-    let mut reader3 = BitReader::new(~[0b11100001, 0b11]);
-    assert_eq!(read_dist(reader3, 23).unwrap(), 3073+993);
+    let mut reader10 = BitReader::new(~[0b11100001, 0b11]);
+    assert_eq!(read_dist(reader10, 23).unwrap(), 3073+993);
 
     /* wrong code */
-    match read_dist(reader1, 30) {
+    match read_dist(reader0, 30) {
       Err(~BadDistCode(30)) => { /* ok */ },
       Err(err) => fail!(fmt!("got error %s", err.to_str())),
       _ => fail!(~"expected error")

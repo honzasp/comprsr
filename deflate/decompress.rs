@@ -161,10 +161,10 @@ mod test {
     /* the distance is too long (points before the start of input) */
     let mut reader1 = BitReader::new(~[
       0b1110_0011, 0b0001_0010, 0b0000_0011,
-      0b0001_0010, 0b0000_0000]);
+      0b0010_0010, 0b0000_0000]);
 
     match decompress(reader1) {
-      Err(~DistanceTooLong(2, 8)) => { /* ok */ },
+      Err(~DistanceTooLong(2, 3)) => { /* ok */ },
       Err(err) => fail!(fmt!("got error %s", err.to_str())),
       _ => fail!(~"expected error")
     }
