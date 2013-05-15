@@ -4,7 +4,7 @@ use deflate::bit_reader::{BitReader};
 use deflate::decompress::compressed::{compressed_block};
 
 pub fn fixed_compressed_block(in: &mut BitReader, out: &mut ~[u8])
-  -> Option<~DeflateError>
+-> Option<~DeflateError>
 {
   compressed_block(in, out,
       |in| read_fix_code(in),
@@ -51,27 +51,27 @@ pub fn read_fix_code(in: &mut BitReader) -> u16 {
 #[cfg(test)]
 mod test {
   use deflate::decompress::fixed::{read_fix_code};
-  use deflate::bit_reader::{BitReader};
+  use deflate::bit_reader::{read_bytes};
 
   #[test]
   fn test_read_fix_code() {
-    let mut reader = BitReader::new(~[
+    do read_bytes(&[
       0b0010_0111, 0b1111_1110, 0b1000_1001, 0b0111_0000,
       0b1000_1101, 0b0000_0001, 0b0110_1000, 0b0110_0011,
       0b0010_1001, 0b1101_0011, 0b1101_0110, 0b0000_1100,
-      0b0000_0010]);
-
-    assert_eq!(read_fix_code(reader), 200);
-    assert_eq!(read_fix_code(reader), 254);
-    assert_eq!(read_fix_code(reader), 20);
-    assert_eq!(read_fix_code(reader), 10);
-    assert_eq!(read_fix_code(reader), 286);
-    assert_eq!(read_fix_code(reader), 256);
-    assert_eq!(read_fix_code(reader), 278);
-    assert_eq!(read_fix_code(reader), 286);
-    assert_eq!(read_fix_code(reader), 100);
-    assert_eq!(read_fix_code(reader), 150);
-    assert_eq!(read_fix_code(reader), 172);
-    assert_eq!(read_fix_code(reader), 281);
+      0b0000_0010]) |mut reader| {
+      assert_eq!(read_fix_code(reader), 200);
+      assert_eq!(read_fix_code(reader), 254);
+      assert_eq!(read_fix_code(reader), 20);
+      assert_eq!(read_fix_code(reader), 10);
+      assert_eq!(read_fix_code(reader), 286);
+      assert_eq!(read_fix_code(reader), 256);
+      assert_eq!(read_fix_code(reader), 278);
+      assert_eq!(read_fix_code(reader), 286);
+      assert_eq!(read_fix_code(reader), 100);
+      assert_eq!(read_fix_code(reader), 150);
+      assert_eq!(read_fix_code(reader), 172);
+      assert_eq!(read_fix_code(reader), 281);
+    }
   }
 }

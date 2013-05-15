@@ -3,7 +3,8 @@ use deflate::error::*;
 use deflate::bit_reader::{BitReader};
 
 pub fn compressed_block(
-  in: &mut BitReader, out: &mut ~[u8],
+  in: &mut BitReader,
+  out: &mut ~[u8],
   read_litlen_code: &fn(&mut BitReader) -> u16,
   read_dist_code: &fn(&mut BitReader) -> u16
 ) -> Option<~DeflateError>
@@ -53,7 +54,9 @@ pub fn read_huff_code(in: &mut BitReader, tree: &HuffmanTree) -> u16 {
   tree.leaf_value(node)
 }
 
-pub fn read_length(in: &mut BitReader, code: u16) -> Result<uint,~DeflateError> {
+pub fn read_length(in: &mut BitReader, code: u16) 
+  -> Result<uint,~DeflateError> 
+{
   if code <= 264 {
     Ok(code as uint - 254)
   } else if code < 285 {
@@ -87,7 +90,7 @@ pub fn read_dist(in: &mut BitReader, code: u16) -> Result<uint,~DeflateError> {
 #[cfg(test)]
 mod test {
   use deflate::decompress::compressed::{read_huff_code, read_length, read_dist};
-  use deflate::bit_reader::{BitReader};
+  use deflate::bit_reader::{read_bytes};
   use deflate::huffman_tree::{HuffmanTree};
   use deflate::error::*;
 
@@ -105,86 +108,101 @@ mod test {
       F   111
     */
 
-    let mut reader = BitReader::new(~[
-      0b1000_0100, 0b0100_1110, 0b1000_0101 ]);
+    do read_bytes(&[0b1000_0100, 0b0100_1110, 0b1000_0101 ]) |mut reader| {
+      assert_eq!(read_huff_code(reader, tree), a);
+      assert_eq!(read_huff_code(reader, tree), c);
+      assert_eq!(read_huff_code(reader, tree), a);
+      assert_eq!(read_huff_code(reader, tree), d);
+      assert_eq!(read_huff_code(reader, tree), e);
+      assert_eq!(read_huff_code(reader, tree), b);
 
-    assert_eq!(read_huff_code(reader, tree), a);
-    assert_eq!(read_huff_code(reader, tree), c);
-    assert_eq!(read_huff_code(reader, tree), a);
-    assert_eq!(read_huff_code(reader, tree), d);
-    assert_eq!(read_huff_code(reader, tree), e);
-    assert_eq!(read_huff_code(reader, tree), b);
-
-    assert_eq!(reader.read_bits(9), 0b1000_0101_0);
+      assert_eq!(reader.read_bits(9), 0b1000_0101_0);
+    }
   }
 
   #[test]
   fn test_read_length() {
     /* small and simple */
-    let mut reader1 = BitReader::new(~[]);
-    assert_eq!(read_length(reader1, 259).unwrap(), 5);
-    assert_eq!(read_length(reader1, 263).unwrap(), 9);
+    do read_bytes(&[]) |mut reader1| {
+      assert_eq!(read_length(reader1, 259).unwrap(), 5);
+      assert_eq!(read_length(reader1, 263).unwrap(), 9);
+    }
 
     /* 3 extra bits */
-    let mut reader2 = BitReader::new(~[0b110]);
-    assert_eq!(read_length(reader2, 274).unwrap(), 43+6);
+    do read_bytes(&[0b110]) |mut reader2| {
+      assert_eq!(read_length(reader2, 274).unwrap(), 43+6);
+    }
 
     /* 5 extra bits */
-    let mut reader5 = BitReader::new(~[0b10011]);
-    assert_eq!(read_length(reader5, 283).unwrap(), 195+19);
-    
-    /* special case - length 258 */
-    assert_eq!(read_length(reader1, 285).unwrap(), 258);
+    do read_bytes(&[0b10011]) |mut reader5| {
+      assert_eq!(read_length(reader5, 283).unwrap(), 195+19);
+    }
+
+    /* special case - length 258 (the bits should be ignored) */
+    do read_bytes(&[0b10101010]) |mut reader| {
+      assert_eq!(read_length(reader, 285).unwrap(), 258);
+    }
 
     /* wrong code */
-    match read_length(reader1, 287) {
-      Err(~BadLengthCode(287)) => { /* ok */ },
-      Err(err) => fail!(fmt!("got error %s", err.to_str())),
-      _ => fail!(~"expected error")
+    do read_bytes(&[]) |mut reader| {
+      match read_length(reader, 287) {
+        Err(~BadLengthCode(287)) => { /* ok */ },
+        Err(err) => fail!(fmt!("got error %s", err.to_str())),
+        _ => fail!(~"expected error")
+      }
     }
   }
 
   #[test]
   fn test_read_dist() {
     /* small and simple */
-    let mut reader0 = BitReader::new(~[]);
-    assert_eq!(read_dist(reader0, 2).unwrap(), 3);
-    assert_eq!(read_dist(reader0, 0).unwrap(), 1);
+    do read_bytes(&[]) |mut reader0| { 
+      assert_eq!(read_dist(reader0, 2).unwrap(), 3);
+      assert_eq!(read_dist(reader0, 0).unwrap(), 1);
+    }
 
     /* 1 extra bit */
-    let mut reader1 = BitReader::new(~[0b01]);
-    assert_eq!(read_dist(reader1, 4).unwrap(), 5+1);
-    assert_eq!(read_dist(reader1, 5).unwrap(), 7);
+    do read_bytes(&[0b01]) |mut reader1| { 
+      assert_eq!(read_dist(reader1, 4).unwrap(), 5+1);
+      assert_eq!(read_dist(reader1, 5).unwrap(), 7);
+    }
 
     /* 2 extra bits */
-    let mut reader2 = BitReader::new(~[0b01_10]);
-    assert_eq!(read_dist(reader2, 7).unwrap(), 13+2);
-    assert_eq!(read_dist(reader2, 6).unwrap(), 10);
+    do read_bytes(&[0b01_10]) |mut reader2| { 
+      assert_eq!(read_dist(reader2, 7).unwrap(), 13+2);
+      assert_eq!(read_dist(reader2, 6).unwrap(), 10);
+    }
 
     /* 3 extra bits */
-    let mut reader3 = BitReader::new(~[0b000_100]);
-    assert_eq!(read_dist(reader3, 8).unwrap(), 17+4);
-    assert_eq!(read_dist(reader3, 9).unwrap(), 25);
+    do read_bytes(&[0b000_100]) |mut reader3| { 
+      assert_eq!(read_dist(reader3, 8).unwrap(), 17+4);
+      assert_eq!(read_dist(reader3, 9).unwrap(), 25);
+    }
 
     /* 5 extra bits */
-    let mut reader5 = BitReader::new(~[0b001_10010, 0b00]);
-    assert_eq!(read_dist(reader5, 13).unwrap(), 97+18);
-    assert_eq!(read_dist(reader5, 12).unwrap(), 65+1);
+    do read_bytes(&[0b001_10010, 0b00]) |mut reader5| { 
+      assert_eq!(read_dist(reader5, 13).unwrap(), 97+18);
+      assert_eq!(read_dist(reader5, 12).unwrap(), 65+1);
+    }
 
     /* 7 extra bits */
-    let mut reader7 = BitReader::new(~[0b0_0000010, 0b000011]);
-    assert_eq!(read_dist(reader7, 17).unwrap(), 385+2);
-    assert_eq!(read_dist(reader7, 16).unwrap(), 257+6);
+    do read_bytes(&[0b0_0000010, 0b000011]) |mut reader7| { 
+      assert_eq!(read_dist(reader7, 17).unwrap(), 385+2);
+      assert_eq!(read_dist(reader7, 16).unwrap(), 257+6);
+    }
 
     /* 10 extra bits */
-    let mut reader10 = BitReader::new(~[0b11100001, 0b11]);
-    assert_eq!(read_dist(reader10, 23).unwrap(), 3073+993);
+    do read_bytes(&[0b11100001, 0b11]) |mut reader10| { 
+      assert_eq!(read_dist(reader10, 23).unwrap(), 3073+993);
+    }
 
     /* wrong code */
-    match read_dist(reader0, 30) {
-      Err(~BadDistCode(30)) => { /* ok */ },
-      Err(err) => fail!(fmt!("got error %s", err.to_str())),
-      _ => fail!(~"expected error")
+    do read_bytes(&[]) |mut reader| {
+      match read_dist(reader, 30) {
+        Err(~BadDistCode(30)) => { /* ok */ },
+        Err(err) => fail!(fmt!("got error %s", err.to_str())),
+        _ => fail!(~"expected error")
+      }
     }
   }
 }

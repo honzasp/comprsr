@@ -19,7 +19,7 @@ fn test_file(path: &Path) {
     Some(~".zlib") => {
       let reference = &path.with_filetype(&"out");
       if os::path_exists(reference) {
-        let compressed = io::read_whole_file(path).unwrap();
+        let compressed = io::file_reader(path).unwrap();
         let expected = io::read_whole_file(reference).unwrap();
         match zlib_decompress(compressed) {
           Ok(actual) => {
