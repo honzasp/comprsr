@@ -67,7 +67,7 @@ impl BitReader {
   }
 }
 
-pub fn read_bytes(bytes: &[u8], f: &fn(r: ~BitReader)) {
+pub fn read_bytes<T>(bytes: &[u8], f: &fn(r: ~BitReader) -> T) -> T {
   let bytes_reader = @io::BytesReader { bytes: bytes, pos: @mut 0 };
   let bit_reader = BitReader::new(bytes_reader as @io::Reader);
   f(bit_reader)
