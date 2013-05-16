@@ -1,10 +1,11 @@
 use deflate::huffman_tree::{HuffmanTree};
 use deflate::error::*;
 use deflate::bit_reader::{BitReader};
+use deflate::output::{Output};
 
 use deflate::decompress::compressed::{read_huff_code, compressed_block};
 
-pub fn dynamic_compressed_block(in: &mut BitReader, out: &mut ~[u8])
+pub fn dynamic_compressed_block(in: &mut BitReader, out: &mut Output)
 -> Option<~DeflateError>
 {
   let hlit = in.read_bits(5);

@@ -1,10 +1,11 @@
 use deflate::huffman_tree::{HuffmanTree};
 use deflate::error::*;
 use deflate::bit_reader::{BitReader};
+use deflate::output::{Output};
 
 pub fn compressed_block(
   in: &mut BitReader,
-  out: &mut ~[u8],
+  out: &mut Output,
   read_litlen_code: &fn(&mut BitReader) -> u16,
   read_dist_code: &fn(&mut BitReader) -> u16
 ) -> Option<~DeflateError>
@@ -13,7 +14,7 @@ pub fn compressed_block(
     let litlen = read_litlen_code(in);
 
     if litlen < 256 {
-      out.push(litlen as u8)
+      out.write(litlen as u8)
     } else if litlen == 256 {
       break
     } else {
@@ -28,11 +29,8 @@ pub fn compressed_block(
           Err(err) => return Some(err)
         };
 
-      if out.len() >= dist {
-        for len.times {
-          let byte = out[out.len() - dist];
-          out.push(byte);
-        }
+      if out.window_len() >= dist {
+        out.repeat(len, dist);
       } else {
         return Some(~DistanceTooLong(out.len(), dist))
       }

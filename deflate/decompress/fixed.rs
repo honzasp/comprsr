@@ -1,9 +1,10 @@
 use deflate::error::*;
 use deflate::bit_reader::{BitReader};
+use deflate::output::{Output};
 
 use deflate::decompress::compressed::{compressed_block};
 
-pub fn fixed_compressed_block(in: &mut BitReader, out: &mut ~[u8])
+pub fn fixed_compressed_block(in: &mut BitReader, out: &mut Output)
 -> Option<~DeflateError>
 {
   compressed_block(in, out,

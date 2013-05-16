@@ -1,4 +1,5 @@
 use deflate::bit_reader::{BitReader};
+use deflate::output::{Output};
 use deflate::error::*;
 
 // TODO: this is ugly!!!
@@ -7,47 +8,60 @@ use deflate::error::*;
 #[path = "decompress/fixed.rs"]          mod fixed;
 #[path = "decompress/dynamic.rs"]        mod dynamic;
 
-pub fn decompress(in: &mut BitReader) -> Result<~[u8],~DeflateError> 
+pub fn decompress(in: &mut BitReader, out: &mut Output)
+  -> Option<~DeflateError> 
 {
   use deflate::decompress::non_compressed::non_compressed_block;
   use deflate::decompress::dynamic::dynamic_compressed_block;
   use deflate::decompress::fixed::fixed_compressed_block;
-
-  let mut out: ~[u8] = ~[];
 
   loop {
     let bfinal = in.read_bit();
     let btype = in.read_bits(2);
 
     match btype {
-      0b00 => match non_compressed_block(in, &mut out) {
-          Some(err) => return Err(err), _ => { }
+      0b00 => match non_compressed_block(in, out) {
+          Some(err) => return Some(err), _ => { }
         },
-      0b01 => match fixed_compressed_block(in, &mut out) {
-          Some(err) => return Err(err), _ => { }
+      0b01 => match fixed_compressed_block(in, out) {
+          Some(err) => return Some(err), _ => { }
         },
-      0b10 => match dynamic_compressed_block(in, &mut out) {
-          Some(err) => return Err(err), _ => { }
+      0b10 => match dynamic_compressed_block(in, out) {
+          Some(err) => return Some(err), _ => { }
         },
-      _ => return Err(~BadBlockType)
+      _ => return Some(~BadBlockType)
     }
 
     if bfinal != 0 {
       break
     } else if in.eof() {
-      return Err(~UnexpectedEOFError)
+      return Some(~UnexpectedEOFError)
     }
   }
   
-  Ok(out)
+  None
 }
 
 #[cfg(test)]
 
 mod test {
   use deflate::decompress::{decompress};
-  use deflate::bit_reader::{read_bytes};
+  use deflate::bit_reader::{read_bytes, BitReader};
+  use deflate::output::{Output};
   use deflate::error::*;
+
+  fn decompress_(in: &mut BitReader) -> Result<~[u8],~DeflateError> {
+    let mut err = None;
+    let bytes = do io::with_bytes_writer |writer| {
+      let mut out = Output::new(writer);
+      err = decompress(in, out);
+    };
+
+    match err {
+      Some(err) => Err(err),
+      None => Ok(bytes)
+    }
+  }
 
   #[test]
   fn test_decompress_non_compressed() {
@@ -58,7 +72,7 @@ mod test {
       0b11110101, 0b11111111,
       10, 20, 30, 40, 50, 60, 70, 80, 90, 100
     ]) |mut reader1| {
-      assert_eq!(decompress(reader1).unwrap(), ~[
+      assert_eq!(decompress_(reader1).unwrap(), ~[
           10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
     }
 
@@ -73,7 +87,7 @@ mod test {
       0b1111_1011, 0b1111_1111,
       77, 88, 99, 110
     ]) |mut reader2| {
-      assert_eq!(decompress(reader2).unwrap(), ~[
+      assert_eq!(decompress_(reader2).unwrap(), ~[
         11, 22, 33, 44, 55, 66, 77, 88, 99, 110]);
     }
   }
@@ -86,7 +100,7 @@ mod test {
       0b0000_0101, 0b0000_0000,
       0b1100_0000, 0b1111_1111
     ]) |mut reader1| {
-      match decompress(reader1) {
+      match decompress_(reader1) {
         Err(~LengthMismatchError(0b0000_0000_0000_0101, 0b1111_1111_1100_0000)) =>
           { /* ok */ },
         Err(err) => fail!(fmt!("unexpected error %s", err.to_str())),
@@ -101,7 +115,7 @@ mod test {
       0b11110101, 0b11111111,
       10, 20, 30, 40 
     ]) |mut reader2| {
-      match decompress(reader2) {
+      match decompress_(reader2) {
         Err(~UnexpectedEOFError) => { /* ok */ },
         Err(err) => fail!(fmt!("unexpected error %s", err.to_str())),
         _ => fail!(~"expected an error")
@@ -115,7 +129,7 @@ mod test {
     do read_bytes(&[
       0b11100011, 0b00010010, 0b10010001, 0b00000011, 0b00000000
     ]) |mut reader1| {
-      assert_eq!(decompress(reader1).unwrap(), ~[10, 20, 30]);
+      assert_eq!(decompress_(reader1).unwrap(), ~[10, 20, 30]);
     }
 
     /* longer data */
@@ -124,7 +138,7 @@ mod test {
       0b11111010, 0b10110111, 0b01111111, 0b01011110,
       0b11001101, 0b10111011, 0b10101011, 0b00000001
     ]) |mut reader2| {
-      assert_eq!(decompress(reader2).unwrap(), ~[
+      assert_eq!(decompress_(reader2).unwrap(), ~[
         248, 170, 165, 103, 246, 254, 74, 131, 187, 123]);
     }
 
@@ -133,7 +147,7 @@ mod test {
       0b10010011, 0b11010011, 0b00000010,
       0b00000010, 0b00001101, 0b00000000
     ]) |mut reader3| {
-      assert_eq!(decompress(reader3).unwrap(), ~[
+      assert_eq!(decompress_(reader3).unwrap(), ~[
         30, 42, 42, 42, 42, 40]);
     }
 
@@ -143,7 +157,7 @@ mod test {
       0b11000100, 0b00001101, 0b10111001,
       0b11000100, 0b00010100, 0b00000001
     ]) |mut reader4| {
-      assert_eq!(decompress(reader4).unwrap(), ~[
+      assert_eq!(decompress_(reader4).unwrap(), ~[
         10, 22, 33, 22, 33, 22, 33, 22, 33, 22, 33, 22, 33, 22, 33, 22, 33, 22,
         33, 22, 33, 22, 33, 22, 33, 22, 33, 22, 33, 10, 22, 33]);
     }
@@ -154,7 +168,7 @@ mod test {
       0b11100001, 0b00011010, 0b00000101, 0b00100011, 0b00001110,
       0b10001000, 0b10000000, 0b00100010, 0b00011110, 0b00000000
     ]) |mut reader5| {
-      let bytes5 = decompress(reader5).unwrap();
+      let bytes5 = decompress_(reader5).unwrap();
 
       assert_eq!(bytes5.slice(0, 5), &[20,30,40,50,60]);
       for uint::range(5, 505) |i| {
@@ -171,7 +185,7 @@ mod test {
       0b1110_0011, 0b0001_0010, 0b0000_0011,
       0b0010_0010, 0b0000_0000
     ]) |mut reader1| {
-      match decompress(reader1) {
+      match decompress_(reader1) {
         Err(~DistanceTooLong(2, 3)) => { /* ok */ },
         Err(err) => fail!(fmt!("got error %s", err.to_str())),
         _ => fail!(~"expected error")
@@ -188,7 +202,7 @@ mod test {
       0b10101100, 0b00000001, 0b11011100, 0b10001100, 0b01100010,
       0b11111101, 0b01001001, 0b00001111
     ]) |mut reader1| {
-      assert_eq!(decompress(reader1).unwrap(), ~[
+      assert_eq!(decompress_(reader1).unwrap(), ~[
         1,4,3,1,0,0,0,2,4,4,2,1,2,2,0,2,3,2,2,1,2,0,1,3]);
     }
   }
@@ -196,7 +210,7 @@ mod test {
   #[test]
   fn test_decompress_bad_btype() {
     do read_bytes(&[0b110]) |mut reader1| {
-      match decompress(reader1) {
+      match decompress_(reader1) {
         Err(~BadBlockType) => { },
         Err(err) => fail!(fmt!("unexpected %s", err.to_str())),
         Ok(_) => fail!(~"expected an error")

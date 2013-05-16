@@ -1,7 +1,8 @@
-use deflate::bit_reader::*;
+use deflate::bit_reader::{BitReader};
+use deflate::output::{Output};
 use deflate::error::*;
 
-pub fn non_compressed_block(in: &mut BitReader, out: &mut ~[u8])
+pub fn non_compressed_block(in: &mut BitReader, out: &mut Output)
 -> Option<~DeflateError> 
 {
   let lsb = in.read_byte();
@@ -13,14 +14,9 @@ pub fn non_compressed_block(in: &mut BitReader, out: &mut ~[u8])
   let nlen: u16 = nlsb as u16 | (nmsb as u16 << 8);
 
   if len == !nlen {
-    // TODO: make an efficient method which copies bytes in -> out
-    for (len as uint).times {
-      vec::push(out, in.read_byte());
-    }
+    out.copy_bytes(len as uint, in)
   } else {
-    return Some(~LengthMismatchError(len as u16, nlen as u16))
+    Some(~LengthMismatchError(len as u16, nlen as u16))
   }
-
-  None
 }
 

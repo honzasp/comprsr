@@ -1,3 +1,5 @@
+use deflate::error::*;
+
 pub struct BitReader {
   reader: @io::Reader,
   buffer: u32,
@@ -54,12 +56,41 @@ impl BitReader {
       self.buffer_bits = self.buffer_bits - 8;
       byte as u8
     } else {
-      if !self.reader.eof() {
-        self.reader.read_byte() as u8
+      let byte = self.reader.read_byte();
+      if byte >= 0 {
+        byte as u8
       } else {
         0
       }
     }
+  }
+
+  pub fn read_bytes(&mut self, len: uint, f: &fn(&[u8])) 
+    -> Option<~DeflateError> 
+  {
+    let mut rem = len;
+
+    while rem > 0 && self.buffer_bits > 0 {
+      f(&[self.read_byte()]);
+      rem = rem - 1;
+    }
+
+    let mut buf = ~[];
+    // TODO: find the best size
+    vec::grow(&mut buf, 128, &0);
+
+    while rem > 0 {
+      let chunk_len = cmp::min(rem, buf.len());
+      let read = self.reader.read(buf, chunk_len);
+      f(buf.slice(0, read));
+      rem = rem - read;
+
+      if read < chunk_len {
+        return Some(~UnexpectedEOFError);
+      }
+    }
+
+    None
   }
 
   pub fn eof(&self) -> bool {

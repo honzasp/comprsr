@@ -21,8 +21,14 @@ fn test_file(path: &Path) {
       if os::path_exists(reference) {
         let compressed = io::file_reader(path).unwrap();
         let expected = io::read_whole_file(reference).unwrap();
-        match zlib_decompress(compressed) {
-          Ok(actual) => {
+
+        let mut opt_err = None;
+        let actual = do io::with_bytes_writer |writer| {
+          opt_err = zlib_decompress(compressed, writer);
+        };
+
+        match opt_err {
+          None => {
             if actual == expected {
               io::print(fmt!("%s: ok\n", path.filename().unwrap()));
             } else {
@@ -33,7 +39,7 @@ fn test_file(path: &Path) {
                 .unwrap().write(actual);
             }
           },
-          Err(err) => {
+          Some(err) => {
             io::print(fmt!("%s: error: %s\n",
               path.filename().unwrap(), err.to_str()));
           }

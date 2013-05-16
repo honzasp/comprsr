@@ -3,6 +3,7 @@
 
 mod deflate {
   mod bit_reader;
+  mod output;
   mod huffman_tree;
   mod decompress;
   mod error;
