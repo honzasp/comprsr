@@ -1,6 +1,6 @@
-extern mod png;
+extern mod comprsr;
 
-use zlib_decompress = png::zlib::decompress::decompress;
+use zlib_decompress = comprsr::zlib::decompress::decompress;
 
 fn main() {
   let test_path = os::self_exe_path().or(Some(os::getcwd())).unwrap();
