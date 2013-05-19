@@ -11,5 +11,6 @@ mod deflate {
 
 pub mod zlib {
   pub mod decompress;
+  mod adler32_writer;
   mod error;
 }
