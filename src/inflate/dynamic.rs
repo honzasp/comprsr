@@ -2,6 +2,7 @@ use inflate::bits;
 use inflate::compressed;
 use inflate::error;
 use inflate::huff;
+use inflate::out;
 
 pub struct HeaderState {
   priv phase: HeaderPhase,
@@ -47,7 +48,7 @@ impl BlockState {
     fail!(~"dynamic block new unimplemented")
   }
 
-  pub fn input(&mut self, bit_reader: &mut bits::BitReader)
+  pub fn input(&mut self, bit_reader: &mut bits::BitReader, out: &mut out::Output)
     -> Option<Result<(),~error::Error>>
   {
     fail!(~"dynamic block unimplemented")

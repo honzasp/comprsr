@@ -2,12 +2,14 @@ use inflate::bits;
 use inflate::dynamic;
 use inflate::error;
 use inflate::fixed;
+use inflate::inflater;
+use inflate::out;
 use inflate::verbatim;
 
 pub struct Inflater<'self> {
   priv stage: Stage,
   priv bit_buf: bits::BitBuf,
-  priv callback: &'self fn(&[u8]),
+  priv output: ~out::Output<'self>,
   priv last_block: bool,
 }
 
@@ -27,12 +29,14 @@ enum Stage {
   DynamicStage(~dynamic::BlockState),
 }
 
+pub static window_size: uint = 32_768;
+
 impl<'self> Inflater<'self> {
   pub fn new<'a>(callback: &'a fn(&[u8])) -> Inflater<'a> {
     Inflater {
       stage: HeaderStage,
       bit_buf: bits::BitBuf::new(),
-      callback: callback,
+      output: ~out::Output::new(callback, inflater::window_size),
       last_block: false,
     }
   }
@@ -72,11 +76,11 @@ impl<'self> Inflater<'self> {
         _ => {
           let result = match self.stage {
             DynamicStage(ref mut dyn_state) =>
-              dyn_state.input(bit_reader),
+              dyn_state.input(bit_reader, self.output),
             FixedStage(ref mut fixed_state) =>
-              fixed_state.input(bit_reader),
+              fixed_state.input(bit_reader, self.output),
             VerbatimStage(ref mut verb_state) =>
-              verb_state.input(bit_reader),
+              verb_state.input(bit_reader, self.output),
             _ => fail!(~"unreachable"),
           };
 
