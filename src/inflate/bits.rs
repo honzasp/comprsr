@@ -16,14 +16,30 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn has_bits(&self, bits: uint) -> bool {
-    false
-  }
-
-  pub fn shift_bits8(&mut self, bits: uint) -> u8 {
     fail!()
   }
 
-  pub fn shift_bits16(&mut self, bits: uint) -> u16 {
+  pub fn has_bytes(&self, bytes: uint) -> bool {
+    fail!()
+  }
+
+  pub fn skip_to_byte(&mut self) {
+    fail!()
+  }
+
+  pub fn read_bits8(&mut self, bits: uint) -> u8 {
+    fail!()
+  }
+
+  pub fn read_bits16(&mut self, bits: uint) -> u16 {
+    fail!()
+  }
+
+  pub fn read_u16(&mut self) -> u16 {
+    fail!()
+  }
+
+  pub fn read_byte_chunk(&mut self, limit: uint) -> &'self [u8] {
     fail!()
   }
 

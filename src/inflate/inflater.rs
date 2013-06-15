@@ -55,8 +55,8 @@ impl<'self> Inflater<'self> {
         HeaderStage => {
           if !bit_reader.has_bits(3) { break; }
 
-          let bfinal = bit_reader.shift_bits8(1);
-          let btype = bit_reader.shift_bits8(2);
+          let bfinal = bit_reader.read_bits8(1);
+          let btype = bit_reader.read_bits8(2);
 
           self.last_block = bfinal != 0;
           match btype {
