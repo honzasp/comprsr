@@ -1,0 +1,16 @@
+#[link(name = "comprsr", vers = "0.0.1", author = "github.com/honzasp")];
+#[crate_type = "lib"];
+
+pub mod inflate {
+  pub use inflate::error::*;
+  pub use inflate::inflater::{Inflater,Res,ConsumedRes,FinishedRes,ErrorRes};
+
+  pub mod bits;
+  pub mod compressed;
+  pub mod dynamic;
+  pub mod error;
+  pub mod fixed;
+  pub mod huff;
+  pub mod inflater;
+  pub mod verbatim;
+}
