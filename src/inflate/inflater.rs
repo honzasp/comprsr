@@ -13,10 +13,10 @@ pub struct Inflater<'self> {
   priv last_block: bool,
 }
 
-pub enum Res<'self> {
+pub enum Res<A> {
   pub ConsumedRes(),
-  pub FinishedRes(&'self [u8]),
-  pub ErrorRes(~error::Error, &'self [u8]),
+  pub FinishedRes(A),
+  pub ErrorRes(~error::Error, A),
 }
 
 enum Stage {
@@ -41,60 +41,65 @@ impl<'self> Inflater<'self> {
     }
   }
 
-  pub fn input<'a>(&mut self, chunk: &'a [u8]) -> Res<'a> {
-    let mut bit_reader = ~bits::BitReader::new(&self.bit_buf, chunk);
+  pub fn input<'a>(&mut self, chunk: &'a [u8]) -> Res<&'a [u8]> {
+    do bits::BitReader::with_buf(&self.bit_buf, chunk) |bit_reader| {
+      // TODO: Rust doesn't support `return` from lambdas !!!
+      let mut ret = None;
 
-    loop {
-      self.stage = match self.stage {
-        EndStage => 
-          return FinishedRes(bit_reader.unconsumed_bytes(chunk)),
-        ErrorStage(ref err) => 
-          return ErrorRes(err.clone(), bit_reader.unconsumed_bytes(chunk)),
-        HeaderStage if self.last_block => 
-          EndStage,
-        HeaderStage => {
-          if !bit_reader.has_bits(3) { break; }
+      loop {
+        self.stage = match self.stage {
+          EndStage => { 
+            ret = Some(Ok(())); break },
+          ErrorStage(ref err) => {
+            ret = Some(Err(err.clone())); break },
+          HeaderStage if self.last_block => 
+            EndStage,
+          HeaderStage => {
+            if bit_reader.has_bits(3) {
+              let bfinal = bit_reader.read_bits8(1);
+              let btype = bit_reader.read_bits8(2);
 
-          let bfinal = bit_reader.read_bits8(1);
-          let btype = bit_reader.read_bits8(2);
-
-          self.last_block = bfinal != 0;
-          match btype {
-            0b00 => VerbatimStage(~verbatim::BlockState::new()),
-            0b01 => FixedStage(~fixed::BlockState::new()),
-            0b10 => DynamicHeaderStage(~dynamic::HeaderState::new()),
-            _    => ErrorStage(~error::BadBlockType(btype)),
-          }
-        },
-        DynamicHeaderStage(ref mut dyn_hdr_state) => 
-          match dyn_hdr_state.input(bit_reader) {
-            Some(Err(err)) => ErrorStage(err),
-            Some(Ok(dyn_block_state)) =>
-              DynamicStage(dyn_block_state),
-            None => break,
+              self.last_block = bfinal != 0;
+              match btype {
+                0b00 => VerbatimStage(~verbatim::BlockState::new()),
+                0b01 => FixedStage(~fixed::BlockState::new()),
+                0b10 => DynamicHeaderStage(~dynamic::HeaderState::new()),
+                _    => ErrorStage(~error::BadBlockType(btype)),
+              }
+            } else {
+              break
+            }
           },
-        _ => {
-          let result = match self.stage {
-            DynamicStage(ref mut dyn_state) =>
-              dyn_state.input(bit_reader, self.output),
-            FixedStage(ref mut fixed_state) =>
-              fixed_state.input(bit_reader, self.output),
-            VerbatimStage(ref mut verb_state) =>
-              verb_state.input(bit_reader, self.output),
-            _ => fail!(~"unreachable"),
-          };
+          DynamicHeaderStage(ref mut dyn_hdr_state) => 
+            match dyn_hdr_state.input(bit_reader) {
+              Some(Err(err)) => ErrorStage(err),
+              Some(Ok(dyn_block_state)) =>
+                DynamicStage(dyn_block_state),
+              None => break,
+            },
+          _ => {
+            let result = match self.stage {
+              DynamicStage(ref mut dyn_state) =>
+                dyn_state.input(bit_reader, self.output),
+              FixedStage(ref mut fixed_state) =>
+                fixed_state.input(bit_reader, self.output),
+              VerbatimStage(ref mut verb_state) =>
+                verb_state.input(bit_reader, self.output),
+              _ => fail!(~"unreachable"),
+            };
 
-          match result {
-            Some(Err(err)) => ErrorStage(err),
-            Some(Ok(()))   => HeaderStage,
-            None           => break,
-          }
-        },
+            match result {
+              Some(Err(err)) => ErrorStage(err),
+              Some(Ok(()))   => HeaderStage,
+              None           => break,
+            }
+          },
+        }
       }
-    }
 
-    self.bit_buf = bit_reader.rest_bit_buf();
-    ConsumedRes
+      ret
+    };
+    fail!()
   }
 
   pub fn is_finished(&self) -> bool {

@@ -1,5 +1,8 @@
+use inflate::error;
+use inflate::inflater;
+
 pub struct BitReader<'self> {
-  priv x: &'self uint,
+  priv rest: &'self [u8],
 }
 
 pub struct BitBuf {
@@ -7,12 +10,27 @@ pub struct BitBuf {
 }
 
 impl<'self> BitReader<'self> {
-  pub fn new<'a>(bit_buf: &BitBuf, chunk: &'a [u8]) -> BitReader<'a> {
-    fail!(~"bit reader unimplemented")
-  }
 
-  pub fn unconsumed_bytes<'a>(&self, chunk: &'a [u8]) -> &'a [u8] {
-    fail!(~"unconsumed bytes unimplemented")
+  pub fn with_buf<'a>(
+    bit_buf: &BitBuf,
+    chunk: &'a [u8],
+    body: &fn(&mut BitReader) -> Option<Result<(),~error::Error>>
+  ) -> inflater::Res<&'a [u8]>
+  {
+    let mut bit_reader = BitReader { rest: chunk };
+    match body(&mut bit_reader) {
+      None => {
+        // save the possible remaining byte to bit_buf
+        inflater::ConsumedRes
+      },
+      Some(res) => {
+        let rest = bit_reader.rest;
+        match res {
+          Ok(())   => inflater::FinishedRes(rest),
+          Err(err) => inflater::ErrorRes(err, rest),
+        }
+      }
+    }
   }
 
   pub fn has_bits(&self, bits: uint) -> bool {
