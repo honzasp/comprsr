@@ -1,6 +1,8 @@
 use inflate::error;
 use inflate::inflater;
 
+use std::cmp;
+
 pub struct BitBuf {
   priv buf: u32,
   priv bits: uint,
@@ -24,10 +26,17 @@ impl BitBuf {
     self.buf = self.buf | (byte as u32 << self.bits);
     self.bits = self.bits + 8;
   }
+
+  #[inline]
+  fn clear(&mut self) {
+    self.buf = 0;
+    self.bits = 0;
+  }
 }
 
 pub struct BitReader<'self> {
   priv rest_bytes: &'self [u8],
+  // invariant: there are less than 8 bits in BitBuf
   priv bit_buf: BitBuf,
 }
 
@@ -58,7 +67,7 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn has_bits(&self, bits: uint) -> bool {
-    // TODO: add sanity check
+    // TODO: add sanity check (bits <= 16)
     if self.rest_bytes.len() >= 2 {
       true
     } else {
@@ -67,17 +76,18 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn has_bytes(&self, bytes: uint) -> bool {
-    // TODO: add sanity check
-    fail!()
+    // TODO: add sanity check (bit_buf.bits == 0)
+    bytes <= self.rest_bytes.len()
   }
 
   pub fn skip_to_byte(&mut self) {
-    fail!()
+    // TODO: add sanity check (bit_buf.bits < 8)
+    self.bit_buf.clear();
   }
 
-  pub fn read_bits(&mut self, bits: uint) -> u32 {
+  fn read_bits(&mut self, bits: uint) -> u32 {
     while self.bit_buf.bits < bits {
-      self.bit_buf.push_byte(self.rest_bytes[0]);
+      self.bit_buf.push_byte(*self.rest_bytes.head());
       self.rest_bytes = self.rest_bytes.tail();
     }
 
@@ -93,16 +103,21 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn read_u16(&mut self) -> u16 {
-    // TODO: add sanity check
-    fail!()
+    // TODO: add sanity check (bit_buf.bits == 0)
+    let lsb = self.rest_bytes[0];
+    let msb = self.rest_bytes[1];
+    self.rest_bytes = self.rest_bytes.tailn(2);
+    msb as u16 * 256 + lsb as u16
   }
 
   pub fn read_byte_chunk(&mut self, limit: uint) -> &'self [u8] {
-    fail!()
-  }
+    // TODO: add sanity check (bit_buf.bits == 0)
+    let len = cmp::min(limit, self.rest_bytes.len());
+    let chunk = self.rest_bytes.slice(0, len);
+    let rest = self.rest_bytes.slice(len, self.rest_bytes.len());
 
-  pub fn rest_bit_buf(self) -> BitBuf {
-    fail!()
+    self.rest_bytes = rest;
+    chunk
   }
 }
 
@@ -112,6 +127,16 @@ mod test {
 
   use inflate::inflater;
   use inflate::error;
+
+  #[test]
+  fn test_with_buf() {
+    let mut n = 0;
+    do BitReader::with_buf(&mut BitBuf::new(), &[]) |_| {
+      n = n + 1;
+      None
+    };
+    assert_eq!(n, 1);
+  }
 
   #[test]
   fn test_with_buf_carry() {
@@ -202,6 +227,74 @@ mod test {
       assert!(reader.has_bits(16));
       assert_eq!(reader.read_bits16(16), 0b11001_10011101_010);
       assert!(reader.has_bits(3) && !reader.has_bits(4));
+      None
+    };
+  }
+
+  #[test]
+  fn test_skip_to_byte() {
+    do BitReader::with_buf(&mut BitBuf::new(), &[0b111_01101, 0b01_011100])
+      |reader|
+    {
+      assert_eq!(reader.read_bits8(5), 0b01101);
+      reader.skip_to_byte();
+      assert_eq!(reader.read_bits8(6), 0b011100);
+      None
+    };
+
+    do BitReader::with_buf(&mut BitBuf::new(), &[0b11101101, 0b01011100])
+      |reader|
+    {
+      reader.skip_to_byte();
+      assert_eq!(reader.read_bits8(8), 0b11101101);
+      reader.skip_to_byte();
+      assert_eq!(reader.read_bits8(8), 0b01011100);
+      reader.skip_to_byte();
+      None
+    };
+  }
+
+  #[test]
+  fn test_has_bytes() {
+    do BitReader::with_buf(&mut BitBuf::new(),
+      &[0b1_1101101, 10, 20, 30]) |reader|
+    {
+      reader.read_bits8(7);
+      reader.skip_to_byte();
+      assert!(reader.has_bytes(3) && !reader.has_bytes(4));
+      reader.read_bits16(16);
+      assert!(reader.has_bytes(1) && !reader.has_bytes(2));
+      reader.read_bits8(8);
+      assert!(reader.has_bytes(0) && !reader.has_bytes(1));
+      None
+    };
+  }
+
+  #[test]
+  fn test_read_u16() {
+    do BitReader::with_buf(&mut BitBuf::new(),
+      &[10, 0b11101101, 0b11001010, 20, 0b00010100, 0b10011100]) |reader|
+    {
+      reader.read_bits8(3);
+      reader.skip_to_byte();
+      assert_eq!(reader.read_u16(), 0b11001010_11101101);
+      reader.read_bits16(8);
+      assert_eq!(reader.read_u16(), 0b10011100_00010100);
+      None
+    };
+  }
+
+  #[test]
+  fn test_read_byte_chunk() {
+    do BitReader::with_buf(&mut BitBuf::new(),
+      &[2,3,5,7,11,13,17,19,23,29]) |reader|
+    {
+      reader.read_bits8(5);
+      reader.skip_to_byte();
+      assert_eq!(reader.read_byte_chunk(6),
+        &[3,5,7,11,13,17]);
+      assert_eq!(reader.read_byte_chunk(6),
+        &[19,23,29]);
       None
     };
   }
