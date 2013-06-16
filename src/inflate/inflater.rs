@@ -99,8 +99,7 @@ impl<'self> Inflater<'self> {
       }
 
       ret
-    };
-    fail!()
+    }
   }
 
   pub fn is_finished(&self) -> bool {
@@ -125,4 +124,15 @@ impl<'self> Inflater<'self> {
   pub fn is_ready(&self) -> bool {
     !self.is_finished()
   }
+}
+
+#[cfg(test)]
+mod test {
+  use inflate::test_helpers::*;
+
+  #[test]
+  fn test_inflate_bad_block_type() {
+    assert_eq!(inflate_err(&[0b110]), ~error::BadBlockType(0b11));
+  }
+
 }

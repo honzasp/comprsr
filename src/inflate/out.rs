@@ -11,6 +11,6 @@ impl<'self> Output<'self> {
   }
 
   pub fn send_literal_chunk(&mut self, chunk: &[u8]) {
-    fail!()
+    (self.callback)(chunk);
   }
 }

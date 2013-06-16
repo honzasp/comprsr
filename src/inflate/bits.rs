@@ -1,3 +1,5 @@
+// TODO: change assert! to sanity! (and disable those checks in "production" code)
+
 use inflate::error;
 use inflate::inflater;
 
@@ -15,6 +17,7 @@ impl BitBuf {
 
   #[inline]
   fn shift_bits(&mut self, bits: uint) -> u32 {
+    assert!(bits <= self.bits);
     let ret = self.buf & !(!0 << bits);
     self.buf = self.buf >> bits;
     self.bits = self.bits - bits;
@@ -23,6 +26,7 @@ impl BitBuf {
 
   #[inline]
   fn push_byte(&mut self, byte: u8) {
+    assert!(self.bits <= 24);
     self.buf = self.buf | (byte as u32 << self.bits);
     self.bits = self.bits + 8;
   }
@@ -36,7 +40,6 @@ impl BitBuf {
 
 pub struct BitReader<'self> {
   priv rest_bytes: &'self [u8],
-  // invariant: there are less than 8 bits in BitBuf
   priv bit_buf: BitBuf,
 }
 
@@ -54,7 +57,7 @@ impl<'self> BitReader<'self> {
 
     match body(&mut bit_reader) {
       None => {
-        // TODO: add sanity check
+        assert!(bit_reader.rest_bytes.len() * 8 + bit_reader.bit_buf.bits <= 16);
         for bit_reader.rest_bytes.each |&byte| {
           bit_reader.bit_buf.push_byte(byte);
         }
@@ -67,7 +70,7 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn has_bits(&self, bits: uint) -> bool {
-    // TODO: add sanity check (bits <= 16)
+    assert!(bits <= 16);
     if self.rest_bytes.len() >= 2 {
       true
     } else {
@@ -76,16 +79,16 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn has_bytes(&self, bytes: uint) -> bool {
-    // TODO: add sanity check (bit_buf.bits == 0)
-    bytes <= self.rest_bytes.len()
+    bytes <= self.bit_buf.bits / 8 + self.rest_bytes.len()
   }
 
   pub fn skip_to_byte(&mut self) {
-    // TODO: add sanity check (bit_buf.bits < 8)
+    assert!(self.bit_buf.bits < 8);
     self.bit_buf.clear();
   }
 
   fn read_bits(&mut self, bits: uint) -> u32 {
+    assert!(bits <= 16);
     while self.bit_buf.bits < bits {
       self.bit_buf.push_byte(*self.rest_bytes.head());
       self.rest_bytes = self.rest_bytes.tail();
@@ -95,23 +98,21 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn read_bits8(&mut self, bits: uint) -> u8 {
+    assert!(bits <= 8);
     self.read_bits(bits) as u8
   }
 
   pub fn read_bits16(&mut self, bits: uint) -> u16 {
+    assert!(bits <= 16);
     self.read_bits(bits) as u16
   }
 
   pub fn read_u16(&mut self) -> u16 {
-    // TODO: add sanity check (bit_buf.bits == 0)
-    let lsb = self.rest_bytes[0];
-    let msb = self.rest_bytes[1];
-    self.rest_bytes = self.rest_bytes.tailn(2);
-    msb as u16 * 256 + lsb as u16
+    self.read_bits16(16)
   }
 
   pub fn read_byte_chunk(&mut self, limit: uint) -> &'self [u8] {
-    // TODO: add sanity check (bit_buf.bits == 0)
+    assert!(self.bit_buf.bits == 0);
     let len = cmp::min(limit, self.rest_bytes.len());
     let chunk = self.rest_bytes.slice(0, len);
     let rest = self.rest_bytes.slice(len, self.rest_bytes.len());
@@ -175,6 +176,31 @@ mod test {
     {
       assert_eq!(reader.read_bits16(15), 0b10010_10100110_11);
       assert!(reader.has_bits(3) && !reader.has_bits(4));
+      None
+    };
+  }
+
+  #[test]
+  fn test_with_buf_many_carries() {
+    let mut bit_buf = BitBuf::new();
+
+    do BitReader::with_buf(&mut bit_buf, &[0b00000_000, 0b00001010])
+      |reader|
+    {
+      assert_eq!(reader.read_bits(3), 0b000);
+      reader.skip_to_byte();
+      assert!(!reader.has_bytes(2));
+      None
+    };
+
+    do BitReader::with_buf(&mut bit_buf, &[0b00000000, 0b11110101, 0b11111111])
+      |reader|
+    {
+      assert!(reader.has_bytes(2));
+      assert_eq!(reader.read_u16(), 0b00000000_00001010);
+      assert!(reader.has_bytes(2));
+      assert_eq!(reader.read_u16(), 0b11111111_11110101);
+      assert!(!reader.has_bytes(1) && !reader.has_bits(1));
       None
     };
   }
