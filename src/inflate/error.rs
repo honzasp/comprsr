@@ -1,6 +1,6 @@
 use std::num::{ToStrRadix};
 
-#[deriving(Clone)]
+#[deriving(Clone,Eq)]
 pub enum Error {
   BadBlockType(u8),
   VerbatimLengthMismatch(u16,u16),

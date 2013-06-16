@@ -13,6 +13,7 @@ pub struct Inflater<'self> {
   priv last_block: bool,
 }
 
+#[deriving(Eq)]
 pub enum Res<A> {
   pub ConsumedRes(),
   pub FinishedRes(A),
@@ -42,7 +43,7 @@ impl<'self> Inflater<'self> {
   }
 
   pub fn input<'a>(&mut self, chunk: &'a [u8]) -> Res<&'a [u8]> {
-    do bits::BitReader::with_buf(&self.bit_buf, chunk) |bit_reader| {
+    do bits::BitReader::with_buf(&mut self.bit_buf, chunk) |bit_reader| {
       // TODO: Rust doesn't support `return` from lambdas !!!
       let mut ret = None;
 
