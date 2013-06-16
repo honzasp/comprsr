@@ -87,7 +87,7 @@ impl<'self> BitReader<'self> {
     self.bit_buf.clear();
   }
 
-  fn read_bits(&mut self, bits: uint) -> u32 {
+  priv fn read_bits(&mut self, bits: uint) -> u32 {
     assert!(bits <= 16);
     while self.bit_buf.bits < bits {
       self.bit_buf.push_byte(*self.rest_bytes.head());
@@ -105,6 +105,14 @@ impl<'self> BitReader<'self> {
   pub fn read_bits16(&mut self, bits: uint) -> u16 {
     assert!(bits <= 16);
     self.read_bits(bits) as u16
+  }
+
+  pub fn read_rev_bits8(&mut self, bits: uint) -> u8 {
+    fail!()
+  }
+
+  pub fn unread_bits8(&mut self, bits: uint, data: u8) {
+    fail!()
   }
 
   pub fn read_u16(&mut self) -> u16 {

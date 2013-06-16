@@ -13,4 +13,12 @@ impl<'self> Output<'self> {
   pub fn send_literal_chunk(&mut self, chunk: &[u8]) {
     (self.callback)(chunk);
   }
+
+  pub fn send_literal(&mut self, byte: u8) {
+    fail!()
+  }
+
+  pub fn back_reference(&mut self, dist: uint, len: uint) {
+    fail!()
+  }
 }
