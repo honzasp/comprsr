@@ -30,10 +30,10 @@ impl BlockState {
                     out.send_literal(byte);
                     LitlenPhase
                   },
-                  LengthCode(len,0) =>
+                  LengthCode(len, 0) =>
                     DistPhase(len),
-                  LengthCode(len_base,len_extra_bits) =>
-                    LenExtraPhase(len_base,len_extra_bits),
+                  LengthCode(len_base, len_extra_bits) =>
+                    LenExtraPhase(len_base, len_extra_bits),
                   BlockEndCode => 
                     return Some(Ok(())),
                 },
@@ -48,7 +48,7 @@ impl BlockState {
             return None;
           }
         },
-        LenExtraPhase(len_base,len_extra_bits) => {
+        LenExtraPhase(len_base, len_extra_bits) => {
           if bit_reader.has_bits(len_extra_bits) {
             let extra = bit_reader.read_bits8(len_extra_bits);
             DistPhase(len_base + extra as uint)

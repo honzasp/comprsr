@@ -5,9 +5,12 @@ pub enum Error {
   BadBlockType(uint),
   BadLitlenCode(uint),
   BadDistCode(uint),
+  BadMetaCode(uint),
   VerbatimLengthMismatch(u16, u16),
   ReferenceBeforeStart(uint, uint, uint),
   ReferenceOutOfWindow(uint, uint, uint),
+  MetaCopyAtStart(),
+  MetaRepeatTooLong(u8, uint, uint),
 }
 
 impl ToStr for Error {
@@ -19,6 +22,8 @@ impl ToStr for Error {
         fmt!("Bad lit/len code %?", code),
       BadDistCode(code) =>
         fmt!("Bad dist code %?", code),
+      BadMetaCode(code) =>
+        fmt!("Bad meta code %?", code),
       VerbatimLengthMismatch(len, nlen) =>
         fmt!("Mismatch between verbatim block length %016s (%?) \
               and its inverse %016s (%?)",
@@ -29,6 +34,11 @@ impl ToStr for Error {
       ReferenceOutOfWindow(dist, len, win_len) =>
         fmt!("Reference to distance %? (len %?), window only %?",
           dist, len, win_len),
+      MetaCopyAtStart =>
+        fmt!("Meta copy code at start"),
+      MetaRepeatTooLong(len_to_repeat, repeat_count, max_repeat_count) =>
+        fmt!("Meta code repeating %? had length %?, maximum %?",
+          len_to_repeat, repeat_count, max_repeat_count),
     }
   }
 }

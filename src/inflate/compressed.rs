@@ -14,6 +14,13 @@ pub enum LitlenCode {
   BlockEndCode,
 }
 
+#[deriving(Eq)]
+pub enum MetaCode {
+  LiteralMetaCode(u8),
+  CopyMetaCode(uint, uint),
+  ZeroesMetaCode(uint, uint),
+}
+
 pub fn decode_litlen(code: uint) -> Result<LitlenCode,~error::Error> {
   if code < 256 {
     Ok(LiteralCode(code as u8))
@@ -49,6 +56,16 @@ pub fn decode_dist(code: uint) -> Result<(uint,uint),~error::Error> {
   } else {
     Err(~error::BadDistCode(code))
   }
+}
+
+pub fn decode_meta(code: uint) -> Result<MetaCode, ~error::Error> {
+  match code {
+    x if x <= 15 => Ok(LiteralMetaCode(x as u8)),
+    16 => Ok(CopyMetaCode(3, 2)),
+    17 => Ok(ZeroesMetaCode(3, 3)),
+    18 => Ok(ZeroesMetaCode(11, 7)),
+    y  => Err(~error::BadMetaCode(code)),
+  } 
 }
 
 #[cfg(test)]
