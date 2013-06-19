@@ -11,6 +11,7 @@ pub enum Error {
   ReferenceOutOfWindow(uint, uint, uint),
   MetaCopyAtStart(),
   MetaRepeatTooLong(u8, uint, uint),
+  TooManyHuffCodesError(uint),
 }
 
 impl ToStr for Error {
@@ -39,6 +40,8 @@ impl ToStr for Error {
       MetaRepeatTooLong(len_to_repeat, repeat_count, max_repeat_count) =>
         fmt!("Meta code repeating %? had length %?, maximum %?",
           len_to_repeat, repeat_count, max_repeat_count),
+      TooManyHuffCodesError(code_len) =>
+        fmt!("Too many %?-bit huffman codes", code_len),
     }
   }
 }

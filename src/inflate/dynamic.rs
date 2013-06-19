@@ -80,7 +80,12 @@ impl HeaderState {
           {
             meta_code_lens[code] = len;
           }
-          self.meta_tree = ~huff::Tree::new_from_lens(meta_code_lens);
+
+          self.meta_tree = match huff::Tree::new_from_lens(meta_code_lens) {
+              Ok(tree) => ~tree,
+              Err(err) => return Some(Err(err)),
+            };
+
           CodeLensPhase
         },
         CodeLensPhase => 
@@ -132,8 +137,14 @@ impl HeaderState {
           let dist_slice = self.code_lens.slice(self.litlen_count,
               self.litlen_count + self.dist_count);
 
-          let litlen_tree = ~huff::Tree::new_from_lens(litlen_slice);
-          let dist_tree = ~huff::Tree::new_from_lens(dist_slice);
+          let litlen_tree = match huff::Tree::new_from_lens(litlen_slice) {
+              Ok(tree) => ~tree,
+              Err(err) => return Some(Err(err)),
+            };
+          let dist_tree = match huff::Tree::new_from_lens(dist_slice) {
+              Ok(tree) => ~tree,
+              Err(err) => return Some(Err(err)),
+            };
 
           let block_state = ~BlockState {
               phase: LitlenPhase,
@@ -215,16 +226,31 @@ impl BlockState {
   }
 }
 
-fn read_len_meta(bit_reader: &mut bits::BitReader, meta_tree: &huff::Tree)
-  -> Option<u8>
-{
-  fail!()
-}
-
 fn read_huff_code(bit_reader: &mut bits::BitReader, huff_tree: &huff::Tree)
   -> Option<uint>
 {
-  fail!()
+  let mut read_data = 0;
+  let mut read_bits = 0;
+  let mut node = huff_tree.root();
+
+  while !huff_tree.is_leaf(node) {
+    if bit_reader.has_bits(1) {
+      let bit = bit_reader.read_bits8(1);
+      read_data = read_data | (bit << read_bits);
+      read_bits = read_bits + 1;
+
+      node = if bit == 0 {
+          huff_tree.zero_child(node)
+        } else {
+          huff_tree.one_child(node)
+        };
+    } else {
+      bit_reader.unread_bits8(read_bits, read_data);
+      return None;
+    }
+  }
+
+  Some(huff_tree.leaf_value(node) as uint)
 }
 
 #[cfg(test)]
