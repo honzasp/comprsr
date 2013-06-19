@@ -115,9 +115,9 @@ mod test {
         0b0000_0101, 0b0000_0000,
         0b1100_0000, 0b1111_1111
       ]),
-      ~error::VerbatimLengthMismatch(
+      (~error::VerbatimLengthMismatch(
         0b0000_0000_0000_0101, 0b1111_1111_1100_0000
-      ));
+      ), &[]));
   }
 
   #[test]

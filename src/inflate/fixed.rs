@@ -1,7 +1,6 @@
 use inflate::bits;
 use inflate::compressed::*;
 use inflate::error;
-use inflate::fixed;
 use inflate::out;
 
 pub struct BlockState {
@@ -21,10 +20,10 @@ impl BlockState {
         LitlenPhase => {
           if bit_reader.has_bits(7) {
             let rev_prefix = bit_reader.read_bits8(5);
-            let (base,extra_bits) = decode_rev_prefix(rev_prefix);
+            let (base,extra_bits) = decode_rev_prefix(rev_prefix as uint);
 
             if bit_reader.has_bits(extra_bits) {
-              let code: u16 = base + bit_reader.read_rev_bits8(extra_bits) as u16;
+              let code = base + bit_reader.read_rev_bits8(extra_bits) as uint;
               match decode_litlen(code) {
                 Ok(litlen) => match litlen {
                   LiteralCode(byte) => {
@@ -35,7 +34,7 @@ impl BlockState {
                     DistPhase(len),
                   LengthCode(len_base,len_extra_bits) =>
                     LenExtraPhase(len_base,len_extra_bits),
-                  BlockEndCode =>
+                  BlockEndCode => 
                     return Some(Ok(())),
                 },
                 Err(err) =>
@@ -59,8 +58,8 @@ impl BlockState {
         },
         DistPhase(len) => {
           if bit_reader.has_bits(5) {
-            let dist_code = bit_reader.read_bits8(5);
-            match decode_dist(dist_code as u16) {
+            let dist_code = bit_reader.read_rev_bits8(5);
+            match decode_dist(dist_code as uint) {
               Ok((dist_base,dist_extra_bits)) =>
                 DistExtraPhase(len,dist_base,dist_extra_bits),
               Err(err) =>
@@ -74,8 +73,10 @@ impl BlockState {
           if bit_reader.has_bits(dist_extra_bits) {
             let dist_extra = bit_reader.read_bits16(dist_extra_bits);
             let dist = dist_base + dist_extra as uint;
-            out.back_reference(dist, len);
-            LitlenPhase
+            match out.back_reference(dist, len) {
+              Ok(()) => LitlenPhase,
+              Err(err) => return Some(Err(err)),
+            }
           } else {
             return None;
           }
@@ -97,16 +98,40 @@ impl BlockState {
   111.. .... (+ 192)
 */
 
-fn decode_rev_prefix(rev_prefix: u8) -> (u16,uint) {
-  fixed::fixed_table[rev_prefix]
-}
+fn decode_rev_prefix(rev_prefix: uint) -> (uint, uint) {
+  fn rev2(x: uint) -> uint {
+    ((x & 0b10) >> 1) | ((x & 0b01) << 1)
+  }
 
-pub static fixed_table: [(u16,uint), ..32] = [
-  (0,3),   (8,3),   (16,3),  (24,3),  (32,3),  (40,3),  (48,3),  (56,3),
-  (64,3),  (72,3),  (80,3),  (88,3),  (96,3),  (104,3), (112,3), (120,3),
-  (128,3), (136,3), (144,4), (160,4), (176,4), (192,4), (208,4), (224,4),
-  (240,4), (256,2), (260,2), (264,2), (268,2), (272,2), (276,2), (280,3),
-];
+  fn rev3(x: uint) -> uint {
+    ((x & 0b100) >> 2) | (x & 0b010) | ((x & 0b001) << 2)
+  }
+
+  match rev_prefix & 0b11 {
+    0b00 => 
+      match (rev_prefix & 0b1100) >> 2 {
+        0b00 | 0b10 => (256 + (rev2((rev_prefix & 0b11000) >> 3) << 2), 2),
+        0b01 => (272 + ((rev_prefix & 0b10000) >> 2), 2),
+        0b11 => (0 + ((rev_prefix & 0b10000) >> 1), 3),
+        _ => fail!(~"unreachable"),
+      },
+    0b10 => (16 + (rev3((rev_prefix & 0b11100) >> 2) << 3), 3),
+    0b01 => (80 + (rev3((rev_prefix & 0b11100) >> 2) << 3), 3),
+    0b11 => 
+      match (rev_prefix & 0b1100) >> 2 {
+        0b00 =>
+          match (rev_prefix & 0b10000) >> 4 {
+            0b0 => (280, 3),
+            0b1 => (144, 4),
+            _ => fail!(~"unreachable"),
+          },
+        0b10 => (160 + ((rev_prefix & 0b10000) >> 0), 4),
+        0b01 | 0b11 => (192 + (rev2((rev_prefix & 0b11000) >> 3) << 4), 4),
+        _ => fail!(~"unreachable"),
+      },
+    _ => fail!(~"unreachable"),
+  }
+}
 
 #[cfg(test)]
 mod test {
@@ -172,7 +197,7 @@ mod test {
         0b1110_0011, 0b0001_0010, 0b0000_0011,
         0b0010_0010, 0b0000_0000
       ]),
-      ~error::DistanceTooLong(2, 3)
+      (~error::ReferenceBeforeStart(3, 3, 2), &[0b0000_0000])
     );
   }
 }

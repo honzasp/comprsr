@@ -14,15 +14,10 @@ pub fn inflate_ok(bytes: &[u8]) -> ~[u8] {
   }
 }
 
-pub fn inflate_err(bytes: &[u8]) -> ~error::Error {
+pub fn inflate_err<'a>(bytes: &'a [u8]) -> (~error::Error, &'a [u8]) {
   let mut inflater = do inflater::Inflater::new |_| { };
   match inflater.input(bytes) {
-    inflater::ErrorRes(err,rest) =>
-      if rest.is_empty() {
-        err
-      } else {
-        fail!(fmt!("inflate_err: got err %?, rest %?", err, rest));
-      },
+    inflater::ErrorRes(err,rest) => (err, rest),
     x => fail!(fmt!("inflate_err: unexpected Res %?", x)),
   }
 }

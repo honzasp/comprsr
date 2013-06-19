@@ -37,7 +37,7 @@ impl<'self> Inflater<'self> {
     Inflater {
       stage: HeaderStage,
       bit_buf: bits::BitBuf::new(),
-      output: ~out::Output::new(callback, inflater::window_size),
+      output: ~out::Output::new(inflater::window_size, callback),
       last_block: false,
     }
   }
@@ -65,7 +65,7 @@ impl<'self> Inflater<'self> {
                 0b00 => VerbatimStage(~verbatim::BlockState::new()),
                 0b01 => FixedStage(~fixed::BlockState::new()),
                 0b10 => DynamicHeaderStage(~dynamic::HeaderState::new()),
-                _    => ErrorStage(~error::BadBlockType(btype)),
+                _    => ErrorStage(~error::BadBlockType(btype as uint)),
               }
             } else {
               break
@@ -98,6 +98,7 @@ impl<'self> Inflater<'self> {
         }
       }
 
+      self.output.flush();
       ret
     }
   }
@@ -132,7 +133,7 @@ mod test {
 
   #[test]
   fn test_inflate_bad_block_type() {
-    assert_eq!(inflate_err(&[0b110]), ~error::BadBlockType(0b11));
+    assert_eq!(inflate_err(&[0b110]), (~error::BadBlockType(0b11), &[]));
   }
 
 }

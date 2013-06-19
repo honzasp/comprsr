@@ -25,8 +25,15 @@ impl BitBuf {
   }
 
   #[inline]
+  fn unshift_bits(&mut self, bits: uint, data: u32) {
+    assert!(bits + self.bits <= 32);
+    self.buf = (self.buf << bits) | data;
+    self.bits = self.bits + bits;
+  }
+
+  #[inline]
   fn push_byte(&mut self, byte: u8) {
-    assert!(self.bits <= 24);
+    assert!(self.bits + 8 <= 32);
     self.buf = self.buf | (byte as u32 << self.bits);
     self.bits = self.bits + 8;
   }
@@ -108,11 +115,19 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn read_rev_bits8(&mut self, bits: uint) -> u8 {
-    fail!()
+    // TODO: this could surely be optimized
+    assert!(bits <= 8);
+    let mut res: u8 = 0;
+    for bits.times {
+      let bit = self.read_bits8(1);
+      res = (res << 1) | bit;
+    }
+    res
   }
 
   pub fn unread_bits8(&mut self, bits: uint, data: u8) {
-    fail!()
+    assert!(bits <= 8);
+    self.bit_buf.unshift_bits(bits, data as u32);
   }
 
   pub fn read_u16(&mut self) -> u16 {
@@ -329,6 +344,31 @@ mod test {
         &[3,5,7,11,13,17]);
       assert_eq!(reader.read_byte_chunk(6),
         &[19,23,29]);
+      None
+    };
+  }
+
+  #[test]
+  fn test_read_rev_bits() {
+    do BitReader::with_buf(&mut BitBuf::new(),
+      &[0b1001_0111, 0b10100_010]) |reader|
+    {
+      assert_eq!(reader.read_rev_bits8(4), 0b1110);
+      assert_eq!(reader.read_rev_bits8(7), 0b1001_010);
+      None
+    };
+  }
+
+  #[test]
+  fn test_unread_bits() {
+    do BitReader::with_buf(&mut BitBuf::new(),
+      &[0b11_01_0001, 0b01101_110]) |reader|
+    {
+      assert_eq!(reader.read_bits8(4), 0b0001);
+      reader.unread_bits8(4, 0b0001);
+      assert_eq!(reader.read_bits8(6), 0b01_0001);
+      reader.unread_bits8(4, 0b01_00);
+      assert_eq!(reader.read_bits16(9), 0b110_11_01_00);
       None
     };
   }
