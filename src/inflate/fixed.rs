@@ -27,6 +27,32 @@ pub fn new_block_state() -> BlockState {
   }
 }
 
+fn read_fixed_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
+  if bit_reader.has_bits(7) {
+    let rev_prefix = bit_reader.read_bits8(5);
+    let (base,extra_bits) = decode_rev_prefix(rev_prefix as uint);
+
+    if bit_reader.has_bits(extra_bits) {
+      let code = base + bit_reader.read_rev_bits8(extra_bits) as uint;
+      Some(code)
+    } else {
+      bit_reader.unread_bits8(5, rev_prefix);
+      None
+    }
+  } else {
+    None
+  }
+}
+
+fn read_fixed_dist_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
+  if bit_reader.has_bits(5) {
+    let code = bit_reader.read_rev_bits8(5);
+    Some(code as uint)
+  } else {
+    None
+  }
+}
+
 /*
   000.. .. (+ 256)
   0010. .. (+ 272)
@@ -71,32 +97,6 @@ fn decode_rev_prefix(rev_prefix: uint) -> (uint, uint) {
         _ => fail!(~"unreachable"),
       },
     _ => fail!(~"unreachable"),
-  }
-}
-
-fn read_fixed_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
-  if bit_reader.has_bits(7) {
-    let rev_prefix = bit_reader.read_bits8(5);
-    let (base,extra_bits) = decode_rev_prefix(rev_prefix as uint);
-
-    if bit_reader.has_bits(extra_bits) {
-      let code = base + bit_reader.read_rev_bits8(extra_bits) as uint;
-      Some(code)
-    } else {
-      bit_reader.unread_bits8(5, rev_prefix);
-      None
-    }
-  } else {
-    None
-  }
-}
-
-fn read_fixed_dist_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
-  if bit_reader.has_bits(5) {
-    let code = bit_reader.read_rev_bits8(5);
-    Some(code as uint)
-  } else {
-    None
   }
 }
 

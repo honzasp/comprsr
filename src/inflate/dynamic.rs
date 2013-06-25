@@ -43,7 +43,6 @@ pub fn decode_meta(code: uint) -> Result<MetaCode, ~error::Error> {
   } 
 }
 
-
 static meta_len_order: [u8, ..19] = 
   [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
 
@@ -109,21 +108,19 @@ impl HeaderState {
           if self.code_lens.len() < self.code_count {
             match read_huff_code(bit_reader, self.meta_tree) {
               Some(code) => match decode_meta(code) {
-                Ok(meta_code) => match meta_code {
-                  LiteralMetaCode(len) => {
-                    self.code_lens.push(len);
-                    CodeLensPhase
-                  },
-                  CopyMetaCode(count_base, count_extra_bits) =>
-                    match self.code_lens.head_opt() {
-                      Some(&last_code) =>
-                        CodeLensRepeatPhase(last_code, count_base, count_extra_bits),
-                      None =>
-                        return Some(Err(~error::MetaCopyAtStart)),
-                    },
-                  ZeroesMetaCode(count_base, count_extra_bits) =>
-                    CodeLensRepeatPhase(0, count_base, count_extra_bits),
+                Ok(LiteralMetaCode(len)) => {
+                  self.code_lens.push(len);
+                  CodeLensPhase
                 },
+                Ok(CopyMetaCode(count_base, count_extra_bits)) =>
+                  match self.code_lens.last_opt() {
+                    Some(&last_code) =>
+                      CodeLensRepeatPhase(last_code, count_base, count_extra_bits),
+                    None =>
+                      return Some(Err(~error::MetaCopyAtStart)),
+                  },
+                Ok(ZeroesMetaCode(count_base, count_extra_bits)) =>
+                  CodeLensRepeatPhase(0, count_base, count_extra_bits),
                 Err(err) => return Some(Err(err)),
               },
               None => return None,
