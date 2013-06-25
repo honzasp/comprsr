@@ -1,7 +1,7 @@
 RUSTC = rustc
 TOUCH = touch
 
-RUST_FLAGS = -A unused-variable
+RUST_FLAGS = 
 COMPRSR_SRCS = $(shell find src -name '*.rs' -type f)
 
 .PHONY: all test clean
