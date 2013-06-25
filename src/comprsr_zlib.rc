@@ -1,0 +1,8 @@
+#[link(name = "comprsr_zlib")];
+#[link(vers = "0.0.1")];
+#[link(author = "github.com/honzasp")];
+#[crate_type = "lib"];
+
+pub mod zlib {
+  pub mod zlib;
+}

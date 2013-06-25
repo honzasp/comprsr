@@ -1,4 +1,6 @@
-#[link(name = "comprsr", vers = "0.0.1", author = "github.com/honzasp")];
+#[link(name = "comprsr_inflate")];
+#[link(vers = "0.0.1")];
+#[link(author = "github.com/honzasp")];
 #[crate_type = "lib"];
 
 pub mod inflate {
