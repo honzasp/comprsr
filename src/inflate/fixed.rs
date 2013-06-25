@@ -1,72 +1,29 @@
 use inflate::bits;
-use inflate::compressed::*;
-use inflate::error;
-use inflate::out;
+use inflate::compressed;
 
-pub struct BlockState {
-  priv phase: BlockPhase,
+pub type BlockState = compressed::BlockState<BlockExtra>;
+struct BlockExtra();
+
+impl compressed::BlockExtra for BlockExtra {
+  fn read_litlen_code(&self, bit_reader: &mut bits::BitReader)
+    -> Option<uint>
+  {
+    read_fixed_code(bit_reader)
+  }
+  
+  fn read_dist_code(&self, bit_reader: &mut bits::BitReader) 
+    -> Option<uint>
+  {
+    read_fixed_dist_code(bit_reader)
+  }
 }
 
-impl BlockState {
-  pub fn new() -> BlockState {
-    BlockState { phase: LitlenPhase }
-  }
-
-  pub fn input(&mut self, bit_reader: &mut bits::BitReader, out: &mut out::Output) ->
-    Option<Result<(),~error::Error>>
-  {
-    loop {
-      self.phase = match self.phase {
-        LitlenPhase => 
-          match read_fixed_code(bit_reader) {
-            Some(code) => match decode_litlen(code) {
-                Ok(litlen) => match litlen {
-                  LiteralCode(byte) => {
-                    out.send_literal(byte);
-                    LitlenPhase
-                  },
-                  LengthCode(len, 0) =>
-                    DistPhase(len),
-                  LengthCode(len_base, len_extra_bits) =>
-                    LenExtraPhase(len_base, len_extra_bits),
-                  BlockEndCode => 
-                    return Some(Ok(())),
-                },
-                Err(err) =>
-                  return Some(Err(err)),
-              },
-            None => return None,
-          },
-        LenExtraPhase(len_base, len_extra_bits) =>
-          if bit_reader.has_bits(len_extra_bits) {
-            let extra = bit_reader.read_bits8(len_extra_bits);
-            DistPhase(len_base + extra as uint)
-          } else {
-            return None;
-          },
-        DistPhase(len) => 
-          match read_fixed_dist_code(bit_reader) {
-            Some(dist_code) => match decode_dist(dist_code) {
-              Ok((dist_base,dist_extra_bits)) =>
-                DistExtraPhase(len,dist_base,dist_extra_bits),
-              Err(err) =>
-                return Some(Err(err)),
-            },
-            None => return None,
-          },
-        DistExtraPhase(len,dist_base,dist_extra_bits) =>
-          if bit_reader.has_bits(dist_extra_bits) {
-            let dist_extra = bit_reader.read_bits16(dist_extra_bits);
-            let dist = dist_base + dist_extra as uint;
-            match out.back_reference(dist, len) {
-              Ok(()) => LitlenPhase,
-              Err(err) => return Some(Err(err)),
-            }
-          } else {
-            return None;
-          },
-      }
-    }
+// TODO: impl BlockState { fn new() }
+// (was blocked by a compiler error which seems to be incorrect)
+pub fn new_block_state() -> BlockState {
+  compressed::BlockState {
+    phase: compressed::LitlenPhase,
+    extra: BlockExtra,
   }
 }
 

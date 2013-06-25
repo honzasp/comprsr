@@ -1,4 +1,6 @@
+use inflate::bits;
 use inflate::error;
+use inflate::out;
 
 pub enum BlockPhase {
   LitlenPhase,
@@ -14,11 +16,75 @@ pub enum LitlenCode {
   BlockEndCode,
 }
 
-#[deriving(Eq)]
-pub enum MetaCode {
-  LiteralMetaCode(u8),
-  CopyMetaCode(uint, uint),
-  ZeroesMetaCode(uint, uint),
+pub struct BlockState<E> {
+  pub phase: BlockPhase,
+  pub extra: E,
+}
+
+pub trait BlockExtra {
+  fn read_litlen_code(&self, bit_reader: &mut bits::BitReader)
+    -> Option<uint>;
+  fn read_dist_code(&self, bit_reader: &mut bits::BitReader) 
+    -> Option<uint>;
+}
+
+impl<E: BlockExtra> BlockState<E> {
+  pub fn input(&mut self, bit_reader: &mut bits::BitReader, out: &mut out::Output)
+    -> Option<Result<(),~error::Error>>
+  {
+    loop {
+      self.phase = match self.phase {
+        LitlenPhase => 
+          match self.extra.read_litlen_code(bit_reader) {
+            Some(code) => match decode_litlen(code) {
+                Ok(litlen) => match litlen {
+                  LiteralCode(byte) => {
+                    out.send_literal(byte);
+                    LitlenPhase
+                  },
+                  LengthCode(len, 0) =>
+                    DistPhase(len),
+                  LengthCode(len_base, len_extra_bits) =>
+                    LenExtraPhase(len_base, len_extra_bits),
+                  BlockEndCode => 
+                    return Some(Ok(())),
+                },
+                Err(err) =>
+                  return Some(Err(err)),
+              },
+            None => return None,
+          },
+        LenExtraPhase(len_base, len_extra_bits) =>
+          if bit_reader.has_bits(len_extra_bits) {
+            let extra = bit_reader.read_bits8(len_extra_bits);
+            DistPhase(len_base + extra as uint)
+          } else {
+            return None;
+          },
+        DistPhase(len) => 
+          match self.extra.read_dist_code(bit_reader) {
+            Some(dist_code) => match decode_dist(dist_code) {
+              Ok((dist_base,dist_extra_bits)) =>
+                DistExtraPhase(len,dist_base,dist_extra_bits),
+              Err(err) =>
+                return Some(Err(err)),
+            },
+            None => return None,
+          },
+        DistExtraPhase(len,dist_base,dist_extra_bits) =>
+          if bit_reader.has_bits(dist_extra_bits) {
+            let dist_extra = bit_reader.read_bits16(dist_extra_bits);
+            let dist = dist_base + dist_extra as uint;
+            match out.back_reference(dist, len) {
+              Ok(()) => LitlenPhase,
+              Err(err) => return Some(Err(err)),
+            }
+          } else {
+            return None;
+          },
+      }
+    }
+  }
 }
 
 pub fn decode_litlen(code: uint) -> Result<LitlenCode,~error::Error> {
@@ -56,16 +122,6 @@ pub fn decode_dist(code: uint) -> Result<(uint,uint),~error::Error> {
   } else {
     Err(~error::BadDistCode(code))
   }
-}
-
-pub fn decode_meta(code: uint) -> Result<MetaCode, ~error::Error> {
-  match code {
-    x if x <= 15 => Ok(LiteralMetaCode(x as u8)),
-    16 => Ok(CopyMetaCode(3, 2)),
-    17 => Ok(ZeroesMetaCode(3, 3)),
-    18 => Ok(ZeroesMetaCode(11, 7)),
-    y  => Err(~error::BadMetaCode(code)),
-  } 
 }
 
 #[cfg(test)]

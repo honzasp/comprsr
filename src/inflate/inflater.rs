@@ -63,7 +63,8 @@ impl<'self> Inflater<'self> {
               self.last_block = bfinal != 0;
               match btype {
                 0b00 => VerbatimStage(~verbatim::BlockState::new()),
-                0b01 => FixedStage(~fixed::BlockState::new()),
+                // TODO: make it fixed::BlockState::new()
+                0b01 => FixedStage(~fixed::new_block_state()),
                 0b10 => DynamicHeaderStage(~dynamic::HeaderState::new()),
                 _    => ErrorStage(~error::BadBlockType(btype as uint)),
               }

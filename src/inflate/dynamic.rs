@@ -1,8 +1,7 @@
 use inflate::bits;
-use inflate::compressed::*;
+use inflate::compressed;
 use inflate::error;
 use inflate::huff;
-use inflate::out;
 
 use std::vec;
 use std::iterator::{IteratorUtil};
@@ -26,6 +25,24 @@ enum HeaderPhase {
   CodeLensRepeatPhase(u8, uint, uint),
   EndPhase,
 }
+
+#[deriving(Eq)]
+pub enum MetaCode {
+  LiteralMetaCode(u8),
+  CopyMetaCode(uint, uint),
+  ZeroesMetaCode(uint, uint),
+}
+
+pub fn decode_meta(code: uint) -> Result<MetaCode, ~error::Error> {
+  match code {
+    x if x <= 15 => Ok(LiteralMetaCode(x as u8)),
+    16 => Ok(CopyMetaCode(3, 2)),
+    17 => Ok(ZeroesMetaCode(3, 3)),
+    18 => Ok(ZeroesMetaCode(11, 7)),
+    y  => Err(~error::BadMetaCode(code)),
+  } 
+}
+
 
 static meta_len_order: [u8, ..19] = 
   [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
@@ -146,10 +163,12 @@ impl HeaderState {
               Err(err) => return Some(Err(err)),
             };
 
-          let block_state = ~BlockState {
-              phase: LitlenPhase,
-              litlen_tree: litlen_tree,
-              dist_tree: dist_tree,
+          let block_state = ~compressed::BlockState {
+              phase: compressed::LitlenPhase,
+              extra: BlockExtra {
+                litlen_tree: litlen_tree,
+                dist_tree: dist_tree,
+              },
             };
 
           return Some(Ok(block_state));
@@ -159,70 +178,23 @@ impl HeaderState {
   }
 }
 
-pub struct BlockState {
-  priv phase: BlockPhase,
+pub type BlockState = compressed::BlockState<BlockExtra>;
+pub struct BlockExtra {
   priv litlen_tree: ~huff::Tree,
   priv dist_tree: ~huff::Tree,
 }
 
-impl BlockState {
-  pub fn input(&mut self, bit_reader: &mut bits::BitReader, out: &mut out::Output)
-    -> Option<Result<(),~error::Error>>
+impl compressed::BlockExtra for BlockExtra {
+  fn read_litlen_code(&self, bit_reader: &mut bits::BitReader)
+    -> Option<uint>
   {
-    // TODO: create a generic dynamic/fixed input method
-    loop {
-      self.phase = match self.phase {
-        LitlenPhase => 
-          match read_huff_code(bit_reader, self.litlen_tree) {
-            Some(code) => match decode_litlen(code) {
-              Ok(litlen) => match litlen {
-                LiteralCode(byte) => {
-                  out.send_literal(byte);
-                  LitlenPhase
-                },
-                LengthCode(len, 0) =>
-                  DistPhase(len),
-                LengthCode(len_base, len_extra_bits) =>
-                  LenExtraPhase(len_base, len_extra_bits),
-                BlockEndCode =>
-                  return Some(Ok(())),
-              },
-              Err(err) =>
-                return Some(Err(err)),
-            },
-            None => 
-              return None
-          },
-        LenExtraPhase(len_base, len_extra_bits) => 
-          if bit_reader.has_bits(len_extra_bits) {
-            let extra = bit_reader.read_bits8(len_extra_bits);
-            DistPhase(len_base + extra as uint)
-          } else {
-            return None;
-          },
-        DistPhase(len) =>
-          match read_huff_code(bit_reader, self.dist_tree) {
-            Some(dist_code) => match decode_dist(dist_code) {
-              Ok((dist_base, dist_extra_bits)) =>
-                DistExtraPhase(len, dist_base, dist_extra_bits),
-              Err(err) =>
-                return Some(Err(err)),
-            },
-            None => return None,
-          },
-        DistExtraPhase(len, dist_base, dist_extra_bits) => 
-          if bit_reader.has_bits(dist_extra_bits) {
-            let dist_extra = bit_reader.read_bits16(dist_extra_bits);
-            let dist = dist_base + dist_extra as uint;
-            match out.back_reference(dist, len) {
-              Ok(()) => LitlenPhase,
-              Err(err) => return Some(Err(err)),
-            }
-          } else {
-            return None;
-          },
-      }
-    }
+    read_huff_code(bit_reader, self.litlen_tree)
+  }
+
+  fn read_dist_code(&self, bit_reader: &mut bits::BitReader) 
+    -> Option<uint>
+  {
+    read_huff_code(bit_reader, self.dist_tree)
   }
 }
 
