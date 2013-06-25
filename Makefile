@@ -1,8 +1,8 @@
 RUSTC = rustc
 TOUCH = touch
-RUSTC_FLAGS         =
-RUSTC_TEST_FLAGS    = $(RUST_FLAGS) 
-RUSTC_COMPILE_FLAGS = $(RUST_FLAGS)
+RUSTC_FLAGS         = -L .
+RUSTC_TEST_FLAGS    = $(RUSTC_FLAGS) 
+RUSTC_COMPILE_FLAGS = $(RUSTC_FLAGS)
 
 COMPRSR_SRCS = $(shell find src -name '*.rs' -type f)
 ALL_CRATES   = $(shell find src -name '*.rc')
@@ -12,7 +12,6 @@ ALL_TESTS    = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]
 .PHONY: all all_tests clean
 
 all: $(ALL_DUMMIES)
-	echo $(ALL_TESTS)
 all_tests: $(ALL_TESTS)
 
 libcomprsr_%.dummy: src/comprsr_%.rc src/%/*.rs
@@ -22,8 +21,10 @@ libcomprsr_%.dummy: src/comprsr_%.rc src/%/*.rs
 test_%: testcomprsr_%~
 	./$<
 
-testcomprsr_%~: src/comprsr_%.rc src/%/*.rs
+testcomprsr_%~: src/comprsr_%.rc libcomprsr_%.dummy src/%/*.rs
 	$(RUSTC) $(RUSTC_TEST_FLAGS) --test $< -o $@
 
 clean:
 	rm -f testcomprsr_*~ libcomprsr_*.dummy libcomprsr_*.so
+
+libcomprsr_zlib.dummy: libcomprsr_inflate.dummy
