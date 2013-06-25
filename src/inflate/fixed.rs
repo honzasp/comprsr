@@ -17,14 +17,9 @@ impl BlockState {
   {
     loop {
       self.phase = match self.phase {
-        LitlenPhase => {
-          if bit_reader.has_bits(7) {
-            let rev_prefix = bit_reader.read_bits8(5);
-            let (base,extra_bits) = decode_rev_prefix(rev_prefix as uint);
-
-            if bit_reader.has_bits(extra_bits) {
-              let code = base + bit_reader.read_rev_bits8(extra_bits) as uint;
-              match decode_litlen(code) {
+        LitlenPhase => 
+          match read_fixed_code(bit_reader) {
+            Some(code) => match decode_litlen(code) {
                 Ok(litlen) => match litlen {
                   LiteralCode(byte) => {
                     out.send_literal(byte);
@@ -39,37 +34,27 @@ impl BlockState {
                 },
                 Err(err) =>
                   return Some(Err(err)),
-              }
-            } else {
-              bit_reader.unread_bits8(5, rev_prefix);
-              return None;
-            }
-          } else {
-            return None;
-          }
-        },
-        LenExtraPhase(len_base, len_extra_bits) => {
+              },
+            None => return None,
+          },
+        LenExtraPhase(len_base, len_extra_bits) =>
           if bit_reader.has_bits(len_extra_bits) {
             let extra = bit_reader.read_bits8(len_extra_bits);
             DistPhase(len_base + extra as uint)
           } else {
             return None;
-          }
-        },
-        DistPhase(len) => {
-          if bit_reader.has_bits(5) {
-            let dist_code = bit_reader.read_rev_bits8(5);
-            match decode_dist(dist_code as uint) {
+          },
+        DistPhase(len) => 
+          match read_fixed_dist_code(bit_reader) {
+            Some(dist_code) => match decode_dist(dist_code) {
               Ok((dist_base,dist_extra_bits)) =>
                 DistExtraPhase(len,dist_base,dist_extra_bits),
               Err(err) =>
                 return Some(Err(err)),
-            }
-          } else {
-            return None;
-          }
-        },
-        DistExtraPhase(len,dist_base,dist_extra_bits) => {
+            },
+            None => return None,
+          },
+        DistExtraPhase(len,dist_base,dist_extra_bits) =>
           if bit_reader.has_bits(dist_extra_bits) {
             let dist_extra = bit_reader.read_bits16(dist_extra_bits);
             let dist = dist_base + dist_extra as uint;
@@ -79,8 +64,7 @@ impl BlockState {
             }
           } else {
             return None;
-          }
-        }
+          },
       }
     }
   }
@@ -130,6 +114,32 @@ fn decode_rev_prefix(rev_prefix: uint) -> (uint, uint) {
         _ => fail!(~"unreachable"),
       },
     _ => fail!(~"unreachable"),
+  }
+}
+
+fn read_fixed_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
+  if bit_reader.has_bits(7) {
+    let rev_prefix = bit_reader.read_bits8(5);
+    let (base,extra_bits) = decode_rev_prefix(rev_prefix as uint);
+
+    if bit_reader.has_bits(extra_bits) {
+      let code = base + bit_reader.read_rev_bits8(extra_bits) as uint;
+      Some(code)
+    } else {
+      bit_reader.unread_bits8(5, rev_prefix);
+      None
+    }
+  } else {
+    None
+  }
+}
+
+fn read_fixed_dist_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
+  if bit_reader.has_bits(5) {
+    let code = bit_reader.read_rev_bits8(5);
+    Some(code as uint)
+  } else {
+    None
   }
 }
 
