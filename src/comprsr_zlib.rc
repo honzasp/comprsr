@@ -7,5 +7,10 @@ extern mod comprsr_inflate
   (vers = "0.0.1", author = "github.com/honzasp");
 
 pub mod zlib {
-  pub mod zlib;
+  pub mod decoder;
+  pub mod error;
+}
+
+pub mod inflate {
+  pub use comprsr_inflate::inflate::{inflater, error};
 }
