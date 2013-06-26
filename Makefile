@@ -21,10 +21,10 @@ libcomprsr_%.dummy: src/comprsr_%.rc src/%/*.rs
 test_%: testcomprsr_%~
 	./$<
 
-testcomprsr_%~: src/comprsr_%.rc libcomprsr_%.dummy src/%/*.rs
+testcomprsr_%~: src/comprsr_%.rc src/%/*.rs
 	$(RUSTC) $(RUSTC_TEST_FLAGS) --test $< -o $@
 
 clean:
 	rm -f testcomprsr_*~ libcomprsr_*.dummy libcomprsr_*.so
 
-libcomprsr_zlib.dummy: libcomprsr_inflate.dummy
+libcomprsr_zlib.dummy testcomprsr_zlib~: libcomprsr_inflate.dummy
