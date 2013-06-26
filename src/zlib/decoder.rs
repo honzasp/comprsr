@@ -1,4 +1,5 @@
 use inflate::inflater;
+//use checksums::adler32;
 use zlib::error;
 use std::cmp;
 use std::uint;
@@ -18,7 +19,7 @@ pub enum Res<A> {
 
 enum Stage<'self> {
   HeaderStage,
-  DataStage(~inflater::Inflater<'self>),
+  DataStage(inflater::Inflater<'self>),
   Adler32Stage,
   EndStage,
 }
@@ -67,7 +68,7 @@ impl<'self> Decoder<'self> {
             } else if fdict != 0 {
               return ErrorRes(~error::DictionaryUsed, rest);
             } else {
-              let inflater = ~inflater::Inflater::new(self.callback);
+              let inflater = inflater::Inflater::new(self.callback);
               DataStage(inflater)
             }
           } else {

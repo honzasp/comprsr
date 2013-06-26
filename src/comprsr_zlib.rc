@@ -5,6 +5,8 @@
 
 extern mod comprsr_inflate
   (vers = "0.0.1", author = "github.com/honzasp");
+extern mod comprsr_checksums
+  (vers = "0.0.1", author = "github.com/honzasp");
 
 pub mod zlib {
   pub mod decoder;
@@ -13,4 +15,8 @@ pub mod zlib {
 
 pub mod inflate {
   pub use comprsr_inflate::inflate::{inflater, error};
+}
+
+pub mod checksums {
+  pub use comprsr_checksums::checksums::{adler32};
 }
