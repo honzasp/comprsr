@@ -3,6 +3,9 @@
 #[link(author = "github.com/honzasp")];
 #[crate_type = "lib"];
 
+extern mod comprsr_recv
+  (vers = "0.0.1", author = "github.com/honzasp");
+
 pub mod inflate {
   pub use inflate::error::*;
   pub use inflate::inflater::{Inflater,Res,ConsumedRes,FinishedRes,ErrorRes};
@@ -18,4 +21,8 @@ pub mod inflate {
   pub mod verbatim;
 
   mod test_helpers;
+}
+
+pub mod recv {
+  pub use comprsr_recv::recv::*;
 }

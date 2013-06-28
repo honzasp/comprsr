@@ -1,13 +1,17 @@
+use recv;
 use inflate::inflater;
-//use checksums::adler32;
+use checksums::adler32;
 use zlib::error;
 use std::cmp;
 use std::uint;
 
-struct Decoder<'self> {
-  priv stage: Stage<'self>,
-  priv callback: &'self fn(&[u8]),
+struct Decoder<R> {
+  priv stage: Stage<R>,
   priv waiting: ~[u8],
+  priv opt_recv: Option<~R>,
+  priv opt_infl: Option<~inflater::Inflater<
+      recv::ForkReceiver<u8, R, adler32::Adler32>
+    >>,
 }
 
 #[deriving(Eq)]
@@ -17,19 +21,39 @@ pub enum Res<A> {
   pub ErrorRes(~error::Error, A),
 }
 
-enum Stage<'self> {
+#[deriving(ToStr)]
+enum Stage<R> {
   HeaderStage,
-  DataStage(inflater::Inflater<'self>),
-  Adler32Stage,
+  DataStage,
+  Adler32Stage(u32),
+  ErrorStage(~error::Error),
   EndStage,
 }
 
-impl<'self> Decoder<'self> {
-  pub fn new<'a>(callback: &'a fn(&[u8])) -> Decoder<'a> {
+impl<R: recv::Receiver<u8>> Decoder<R> {
+  pub fn new(receiver: ~R) -> Decoder<R> {
     Decoder { 
       stage: HeaderStage,
-      callback: callback,
       waiting: ~[],
+      opt_recv: Some(receiver),
+      opt_infl: None,
+    }
+  }
+
+  pub fn finish(self) -> ~R {
+    if self.opt_recv.is_some() {
+      if self.opt_infl.is_some() {
+        fail!(~"Both self.opt_recv and self.opt_infl are Some");
+      } else {
+        self.opt_recv.unwrap()
+      }
+    } else {
+      if self.opt_infl.is_some() {
+        let (recv, _a32) = self.opt_infl.unwrap().finish().finish();
+        recv
+      } else {
+        fail!(~"Neither self.opt_recv nor self.opt_infl are Some");
+      }
     }
   }
 
@@ -60,33 +84,52 @@ impl<'self> Decoder<'self> {
             let win_size: uint = 1 << (8 + cinfo as uint);
 
             if cm != 8 {
-              return ErrorRes(~error::BadCompressionMethod(cm as uint), rest);
+              ErrorStage(~error::BadCompressionMethod(cm as uint))
             } else if win_size > 32 * 1024 {
-              return ErrorRes(~error::WindowTooLong(win_size), rest);
+              ErrorStage(~error::WindowTooLong(win_size))
             } else if (cmf as uint * 256 + flg as uint) % 31 != 0 {
-              return ErrorRes(~error::BadHeaderChecksum(cmf, flg), rest);
+              ErrorStage(~error::BadHeaderChecksum(cmf, flg))
             } else if fdict != 0 {
-              return ErrorRes(~error::DictionaryUsed, rest);
+              ErrorStage(~error::DictionaryUsed)
             } else {
-              let inflater = inflater::Inflater::new(self.callback);
-              DataStage(inflater)
+              // unique type dance :)
+              if self.opt_recv.is_some() {
+                let recv = self.opt_recv.swap_unwrap();
+                let a32 = ~adler32::Adler32::new();
+                let fork_recv = ~recv::ForkReceiver::new(recv, a32);
+                let inflater = ~inflater::Inflater::new(fork_recv);
+                self.opt_infl = Some(inflater);
+                DataStage
+              } else {
+                fail!(fmt!("Decoder.input: stage is HeaderStage, \
+                  but self.opt_recv is None"));
+              }
             }
           } else {
             return ConsumedRes
           }
         },
-        DataStage(ref mut inflater) => 
-          match inflater.input(rest) {
+        DataStage => {
+          match self.opt_infl.get_mut_ref().input(rest) {
             inflater::ConsumedRes => 
               return ConsumedRes,
-            inflater::ErrorRes(error, inflate_rest) => 
-              return ErrorRes(~error::InflateError(error), inflate_rest),
+            inflater::ErrorRes(error, inflate_rest) => {
+              rest = inflate_rest;
+              let inflater = self.opt_infl.swap_unwrap();
+              let (recv, _a32) = inflater.finish().finish();
+              self.opt_recv = Some(recv);
+              ErrorStage(~error::InflateError(error))
+            },
             inflater::FinishedRes(inflate_rest) => {
               rest = inflate_rest;
-              Adler32Stage
+              let inflater = self.opt_infl.swap_unwrap();
+              let (recv, a32) = inflater.finish().finish();
+              self.opt_recv = Some(recv);
+              Adler32Stage(a32.adler32())
             },
-          },
-        Adler32Stage => {
+          }
+        },
+        Adler32Stage(_expected_a32) => {
           let to_wait = cmp::min(rest.len(), 4 - self.waiting.len());
           for uint::range(0, to_wait) |i| {
             self.waiting.push(rest[i]);
@@ -94,14 +137,22 @@ impl<'self> Decoder<'self> {
           rest = rest.slice(to_wait, rest.len());
 
           if self.waiting.len() >= 4 {
-            // TODO: check the checksum
+            let _read_a32 =
+              (self.waiting[0] << 24) |
+              (self.waiting[1] << 16) |
+              (self.waiting[2] << 8) |
+              (self.waiting[3]);
+            self.waiting = ~[];
+
             EndStage
           } else {
             return ConsumedRes
           }
         },
         EndStage =>
-          return FinishedRes(rest)
+          return FinishedRes(rest),
+        ErrorStage(ref err) =>
+          return ErrorRes(err.clone(), rest),
       }
     }
   }
@@ -114,19 +165,18 @@ mod test {
   use inflate;
 
   fn decode_ok(bytes: &[u8]) -> ~[u8] {
-    let mut buf = ~[];
-    let mut decoder = do decoder::Decoder::new |chunk| {
-      buf.push_all(chunk);
-    };
+    let buf = ~[];
+    let mut decoder = decoder::Decoder::new(~buf);
 
     match decoder.input(bytes) {
-      decoder::FinishedRes(rest) if rest.is_empty() => buf,
+      decoder::FinishedRes(rest) if rest.is_empty() => *decoder.finish(),
       x => fail!(fmt!("decode_ok: unexpected Res %?", x)),
     }
   }
 
   fn decode_err<'a>(bytes: &'a [u8]) -> (~error::Error, &'a [u8]) {
-    let mut decoder = do decoder::Decoder::new |_| { };
+    let receiver = ();
+    let mut decoder = decoder::Decoder::new(~receiver);
 
     match decoder.input(bytes) {
       decoder::ErrorRes(err, rest) => (err, rest),

@@ -1,3 +1,5 @@
+use recv::{Receiver};
+
 struct Adler32 {
   priv s1: u32,
   priv s2: u32,
@@ -9,6 +11,7 @@ impl Adler32 {
     Adler32 { s1: 1, s2: 0, i: 0 }
   }
 
+  #[inline]
   pub fn update(&mut self, chunk: &[u8]) {
     for chunk.each |&b| {
       self.s1 = self.s1 + b as u32;
@@ -23,14 +26,23 @@ impl Adler32 {
     }
   }
 
+  #[inline]
   pub fn adler32(&self) -> u32 {
     ((self.s2 % 65521) << 16) | (self.s1 % 65521)
+  }
+}
+
+impl Receiver<u8> for Adler32 {
+  #[inline]
+  pub fn receive(&mut self, elems: &[u8]) {
+    self.update(elems);
   }
 }
 
 #[cfg(test)]
 mod test {
   use checksums::adler32;
+  use recv::{Receiver};
 
   fn adler32(bytes: &[u8]) -> u32 {
     let mut a32 = adler32::Adler32::new();
@@ -107,5 +119,13 @@ mod test {
 
       assert_eq!(a32.adler32(), 0x1bd6f6f3);
     };
+  }
+
+  #[test]
+  fn test_adler32_receiver() {
+    let mut a32 = adler32::Adler32::new();
+    a32.receive(&[38, 101, 228, 50, 170, 180, 36, 50, 248, 165]);
+    a32.receive(&[115, 175, 223, 37, 68, 61, 23, 184, 210, 172]);
+    assert_eq!(a32.adler32(), 0x648709e7);
   }
 }

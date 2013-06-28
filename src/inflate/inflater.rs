@@ -1,3 +1,4 @@
+use recv;
 use inflate::bits;
 use inflate::dynamic;
 use inflate::error;
@@ -6,10 +7,10 @@ use inflate::inflater;
 use inflate::out;
 use inflate::verbatim;
 
-pub struct Inflater<'self> {
+pub struct Inflater<'self, R> {
   priv stage: Stage,
   priv bit_buf: bits::BitBuf,
-  priv output: ~out::Output<'self>,
+  priv output: ~out::Output<R>,
   priv last_block: bool,
 }
 
@@ -32,14 +33,18 @@ enum Stage {
 
 pub static window_size: uint = 32_768;
 
-impl<'self> Inflater<'self> {
-  pub fn new<'a>(callback: &'a fn(&[u8])) -> Inflater<'a> {
+impl<R: recv::Receiver<u8>> Inflater<R> {
+  pub fn new(receiver: ~R) -> Inflater<R> {
     Inflater {
       stage: HeaderStage,
       bit_buf: bits::BitBuf::new(),
-      output: ~out::Output::new(inflater::window_size, callback),
+      output: ~out::Output::new(inflater::window_size, receiver),
       last_block: false,
     }
+  }
+
+  pub fn finish(self) -> ~R {
+    self.output.finish()
   }
 
   pub fn input<'a>(&mut self, chunk: &'a [u8]) -> Res<&'a [u8]> {
@@ -130,6 +135,7 @@ impl<'self> Inflater<'self> {
 
 #[cfg(test)]
 mod test {
+  use inflate::inflater;
   use inflate::test_helpers::*;
 
   #[test]
@@ -137,4 +143,19 @@ mod test {
     assert_eq!(inflate_err(&[0b110]), (~error::BadBlockType(0b11), &[]));
   }
 
+  #[test]
+  fn test_inflate_finish() {
+    let buf: ~[u8] = ~[];
+
+    let mut inflater = inflater::Inflater::new(~buf);
+    inflater.input(&[
+        0b00000_001,
+        0b00001010, 0b00000000,
+        0b11110101, 0b11111111,
+        10, 20, 30, 40, 50, 60, 70, 80, 90, 100
+      ]);
+
+    let buf = *inflater.finish();
+    assert_eq!(buf, ~[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+  }
 }
