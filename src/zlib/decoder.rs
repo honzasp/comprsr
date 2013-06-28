@@ -129,7 +129,7 @@ impl<R: recv::Receiver<u8>> Decoder<R> {
             },
           }
         },
-        Adler32Stage(_expected_a32) => {
+        Adler32Stage(expected_a32) => {
           let to_wait = cmp::min(rest.len(), 4 - self.waiting.len());
           for uint::range(0, to_wait) |i| {
             self.waiting.push(rest[i]);
@@ -137,14 +137,18 @@ impl<R: recv::Receiver<u8>> Decoder<R> {
           rest = rest.slice(to_wait, rest.len());
 
           if self.waiting.len() >= 4 {
-            let _read_a32 =
-              (self.waiting[0] << 24) |
-              (self.waiting[1] << 16) |
-              (self.waiting[2] << 8) |
-              (self.waiting[3]);
+            let read_a32 =
+              (self.waiting[0] as u32 << 24) |
+              (self.waiting[1] as u32 << 16) |
+              (self.waiting[2] as u32 << 8) |
+              (self.waiting[3] as u32);
             self.waiting = ~[];
 
-            EndStage
+            if expected_a32 == read_a32 {
+              EndStage
+            } else {
+              ErrorStage(~error::BadDataChecksum(expected_a32, read_a32))
+            }
           } else {
             return ConsumedRes
           }
@@ -251,6 +255,17 @@ mod test {
       ]),
       (~error::InflateError(~inflate::error::BadBlockType(0b11)),
         &[0b01100100, 0b01100010])
+    );
+
+    assert_eq!(decode_err(&[
+        0b01111000, 0b10011100, 0b01100011, 0b01100010, 0b01100110,
+        0b01100101, 0b11100111, 0b00000110, 0b00000000, 0b00000000,
+        0b01000011, 0b11100000, 0b00011101, 7, 8, 9,
+      ]),
+      (~error::BadDataChecksum(
+          0b00000000_01000011_00000000_00011101,
+          0b00000000_01000011_11100000_00011101
+        ), &[7, 8, 9])
     );
   }
 
