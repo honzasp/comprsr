@@ -132,7 +132,7 @@ mod test {
 
   #[test]
   fn test_decode_litlen() {
-    for [0, 10, 100, 255, 200, 135].each |&x| {
+    for (&[0u, 10, 100, 255, 200, 135]).iter().advance |&x| {
       assert_eq!(decode_litlen(x), Ok(LiteralCode(x as u8)));
     };
 
@@ -147,7 +147,7 @@ mod test {
     assert_eq!(decode_litlen(282), Ok(LengthCode(163, 5)));
     assert_eq!(decode_litlen(285), Ok(LengthCode(258, 0)));
 
-    for [286, 287, 300, 1024].each |&y| {
+    for (&[286u, 287, 300, 1024]).iter().advance |&y| {
       assert_eq!(decode_litlen(y), Err(~error::BadLitlenCode(y)));
     };
   }
@@ -165,8 +165,8 @@ mod test {
     assert_eq!(decode_dist(24), Ok((4097, 11)));
     assert_eq!(decode_dist(29), Ok((24577, 13)));
 
-    for [30, 31, 40, 50, 1000].each |&x| {
+    for (&[30u, 31, 40, 50, 1000]).iter().advance |&x| {
       assert_eq!(decode_dist(x), Err(~error::BadDistCode(x)));
-    }
+    };
   }
 }

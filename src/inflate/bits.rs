@@ -385,7 +385,8 @@ mod test {
       assert_eq!(reader.read_bits16(12), 0b0110_11001110);
       reader.unread_bits16(3, 0b011);
       assert_eq!(reader.read_bits16(10), 0b011_1010011);
-    }
+      None
+    };
   }
 }
 
