@@ -9,10 +9,13 @@ ALL_CRATES   = $(shell find src -name '*.rc')
 ALL_DUMMIES  = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]*\)\.rc/libcomprsr_\1.dummy/')
 ALL_TESTS    = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]*\)\.rc/test_\1/')
 
-.PHONY: all all_tests clean
+.PHONY: all unit_tests clean func_tests
 
 all: $(ALL_DUMMIES)
-all_tests: $(ALL_TESTS)
+unit_tests: $(ALL_TESTS)
+
+func_tests: libcomprsr_zlib.dummy
+	cd test; $(MAKE) all
 
 libcomprsr_%.dummy: src/comprsr_%.rc src/%/*.rs
 	$(RUSTC) $(RUSTC_COMPILE_FLAGS) $< --out-dir .
