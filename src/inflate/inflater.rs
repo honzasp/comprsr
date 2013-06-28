@@ -109,7 +109,7 @@ impl<R: recv::Receiver<u8>> Inflater<R> {
     }
   }
 
-  pub fn is_finished(&self) -> bool {
+  pub fn has_finished(&self) -> bool {
     match self.stage {
       EndStage      => true,
       ErrorStage(_) => true,
@@ -129,7 +129,7 @@ impl<R: recv::Receiver<u8>> Inflater<R> {
   }
 
   pub fn is_ready(&self) -> bool {
-    !self.is_finished()
+    !self.has_finished()
   }
 }
 

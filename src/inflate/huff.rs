@@ -1,5 +1,4 @@
 use inflate::error;
-use std::iterator::*;
 use std::uint;
 use std::vec;
 
@@ -54,7 +53,7 @@ impl Tree {
       front_offset = 0;
 
       if bl_syms[level].len() <= front.len() {
-        for bl_syms[level].each |&sym| {
+        for bl_syms[level].iter().advance |&sym| {
           let sym_n = front[front_offset];
           nodes[sym_n] = (sym << 1) | 0b1;
 

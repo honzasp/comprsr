@@ -160,6 +160,29 @@ impl<R: recv::Receiver<u8>> Decoder<R> {
       }
     }
   }
+
+  pub fn has_finished(&self) -> bool {
+    match self.stage {
+      EndStage      => true,
+      ErrorStage(_) => true,
+      _ => false,
+    }
+  }
+
+  pub fn get_error(&self) -> Option<~error::Error> {
+    match self.stage {
+      ErrorStage(ref err) => Some(err.clone()),
+      _ => None,
+    }
+  }
+
+  pub fn is_error(&self) -> bool {
+    self.get_error().is_some()
+  }
+
+  pub fn is_ready(&self) -> bool {
+    !self.has_finished()
+  }
 }
 
 #[cfg(test)]

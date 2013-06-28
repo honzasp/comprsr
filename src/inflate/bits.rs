@@ -65,7 +65,7 @@ impl<'self> BitReader<'self> {
     match body(&mut bit_reader) {
       None => {
         assert!(bit_reader.rest_bytes.len() * 8 + bit_reader.bit_buf.bits <= 16);
-        for bit_reader.rest_bytes.each |&byte| {
+        for bit_reader.rest_bytes.iter().advance |&byte| {
           bit_reader.bit_buf.push_byte(byte);
         }
         *bit_buf = bit_reader.bit_buf;
@@ -127,6 +127,11 @@ impl<'self> BitReader<'self> {
 
   pub fn unread_bits8(&mut self, bits: uint, data: u8) {
     assert!(bits <= 8);
+    self.bit_buf.unshift_bits(bits, data as u32);
+  }
+
+  pub fn unread_bits16(&mut self, bits: uint, data: u16) {
+    assert!(bits <= 16);
     self.bit_buf.unshift_bits(bits, data as u32);
   }
 
@@ -371,6 +376,16 @@ mod test {
       assert_eq!(reader.read_bits16(9), 0b110_11_01_00);
       None
     };
+
+    do BitReader::with_buf(&mut BitBuf::new(),
+      &[0b11001110, 0b1010_01_10, 0b00110011]) |reader|
+    {
+      assert_eq!(reader.read_bits16(10), 0b10_11001110);
+      reader.unread_bits16(10, 0b10_11001110);
+      assert_eq!(reader.read_bits16(12), 0b0110_11001110);
+      reader.unread_bits16(3, 0b011);
+      assert_eq!(reader.read_bits16(10), 0b011_1010011);
+    }
   }
 }
 

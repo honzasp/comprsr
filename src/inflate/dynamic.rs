@@ -3,7 +3,6 @@ use inflate::compressed;
 use inflate::error;
 use inflate::huff;
 
-use std::vec;
 use std::iterator::{IteratorUtil};
 
 pub struct HeaderState {
@@ -71,8 +70,8 @@ impl HeaderState {
             self.dist_count = hdist as uint + 1;
             self.code_count = self.litlen_count + self.dist_count;
 
-            vec::reserve(&mut self.meta_lens, self.meta_count);
-            vec::reserve(&mut self.code_lens, self.code_count);
+            self.meta_lens.reserve(self.meta_count);
+            self.code_lens.reserve(self.code_count);
             MetaLensPhase
           } else {
             return None
@@ -198,14 +197,14 @@ impl compressed::BlockExtra for BlockExtra {
 fn read_huff_code(bit_reader: &mut bits::BitReader, huff_tree: &huff::Tree)
   -> Option<uint>
 {
-  let mut read_data = 0;
+  let mut read_data: u16 = 0;
   let mut read_bits = 0;
   let mut node = huff_tree.root();
 
   while !huff_tree.is_leaf(node) {
     if bit_reader.has_bits(1) {
       let bit = bit_reader.read_bits8(1);
-      read_data = read_data | (bit << read_bits);
+      read_data = read_data | (bit as u16 << read_bits);
       read_bits = read_bits + 1;
 
       node = if bit == 0 {
@@ -214,7 +213,7 @@ fn read_huff_code(bit_reader: &mut bits::BitReader, huff_tree: &huff::Tree)
           huff_tree.one_child(node)
         };
     } else {
-      bit_reader.unread_bits8(read_bits, read_data);
+      bit_reader.unread_bits16(read_bits, read_data);
       return None;
     }
   }

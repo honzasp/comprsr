@@ -13,7 +13,7 @@ impl Adler32 {
 
   #[inline]
   pub fn update(&mut self, chunk: &[u8]) {
-    for chunk.each |&b| {
+    for chunk.iter().advance |&b| {
       self.s1 = self.s1 + b as u32;
       self.s2 = self.s2 + self.s1;
       self.i = self.i + 1;
