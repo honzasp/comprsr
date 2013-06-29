@@ -194,7 +194,7 @@ impl compressed::BlockExtra for BlockExtra {
   }
 }
 
-fn read_huff_code(bit_reader: &mut bits::BitReader, huff_tree: &huff::Tree)
+pub fn read_huff_code(bit_reader: &mut bits::BitReader, huff_tree: &huff::Tree)
   -> Option<uint>
 {
   let mut read_data: u16 = 0;
@@ -223,6 +223,12 @@ fn read_huff_code(bit_reader: &mut bits::BitReader, huff_tree: &huff::Tree)
 
 #[cfg(test)]
 mod test {
+  use extra::test;
+  use std::rand;
+  use std::rand::{RngUtil};
+  use inflate::huff;
+  use inflate::bits;
+  use inflate::dynamic;
   use inflate::test_helpers::*;
 
   #[test]
@@ -269,6 +275,25 @@ mod test {
           30, 120]
       );
     }
+  }
+
+  #[bench]
+  fn bench_read_huff_code(b: &mut test::BenchHarness) {
+    let tree = huff::Tree::new_from_lens(
+      &[3, 6, 6, 4, 5, 4, 7, 7, 7, 6, 5, 6, 4, 
+        5, 4, 6, 7, 6, 6, 6, 7, 5, 5, 6, 5, 6, 
+        6, 7, 3, 5, 5]).unwrap();
+
+    let bytes = rand::IsaacRng::new_seeded(&[42]).gen_bytes(1000);
+
+    do b.iter {
+      do bits::BitReader::with_buf(&mut bits::BitBuf::new(), bytes) |reader| {
+        for 1000.times {
+          dynamic::read_huff_code(reader, &tree);
+        }
+        Some(Ok(()))
+      };
+    };
   }
 }
 

@@ -433,10 +433,7 @@ mod test {
           reader.read_bits16(9);
         }
 
-        // skip the rest
-        reader.skip_to_byte();
-        reader.read_byte_chunk(1000);
-        None
+        Some(Ok(()))
       };
     };
   }
@@ -454,18 +451,7 @@ mod test {
           }
         }
 
-        /* TODO: is this ever needed?
-        for 100.times {
-          for (&[9u, 16, 10, 11]).iter().advance |&b| {
-            assert!(reader.has_bits(b));
-            reader.read_rev_bits16(b);
-          }
-        }
-        */
-
-        reader.skip_to_byte();
-        reader.read_byte_chunk(1000);
-        None
+        Some(Ok(()))
       };
     };
   }

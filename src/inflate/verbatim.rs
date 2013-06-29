@@ -165,11 +165,11 @@ mod test {
 
     let mut bytes: ~[u8] = ~[];
     {
-      let mut remaining_len = 123_456;
+      let mut remaining_len = 12_456;
       let rng = &mut rand::rng();
 
       for 10.times {
-        let len = rng.gen_uint_range(9_000, 12_000) as u16;
+        let len = rng.gen_uint_range(900, 1200) as u16;
         gen_verb_block(&mut bytes, len, false, rng);
         remaining_len -= len;
       }
