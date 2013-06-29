@@ -74,7 +74,13 @@ impl BlockState {
 
 #[cfg(test)]
 mod test {
+  use extra::test;
+  use std::rand;
+  use std::rand::{RngUtil};
+  use std::cmp;
+
   use inflate::test_helpers::*;
+  use inflate::inflater;
 
   #[test]
   fn test_inflate_verbatim() {
@@ -139,4 +145,54 @@ mod test {
     assert_eq!(&buf, &~[10,20,30,40,50]);
   }
   */
+
+  #[bench]
+  fn bench_verbatim(b: &mut test::BenchHarness) {
+    fn gen_verb_block<R: rand::Rng>(
+      bytes: &mut ~[u8],
+      len: u16,
+      final: bool,
+      rng: &mut R
+    ) {
+      bytes.push(if final { 0b00000_001 } else { 0b00000_000 });
+      bytes.push((len & 0xff) as u8);
+      bytes.push((len >> 8) as u8);
+      bytes.push(!(len & 0xff) as u8);
+      bytes.push(!(len >> 8) as u8);
+
+      bytes.push_all(rng.gen_bytes(len as uint));
+    }
+
+    let mut bytes: ~[u8] = ~[];
+    {
+      let mut remaining_len = 123_456;
+      let rng = &mut rand::rng();
+
+      for 10.times {
+        let len = rng.gen_uint_range(9_000, 12_000) as u16;
+        gen_verb_block(&mut bytes, len, false, rng);
+        remaining_len -= len;
+      }
+
+      gen_verb_block(&mut bytes, remaining_len, true, rng);
+    }
+
+    do b.iter {
+      let mut inflater = inflater::Inflater::new(~());
+      let mut input_pos = 0;
+
+      while input_pos < bytes.len() {
+        let next_pos = cmp::min(bytes.len(), input_pos + 1024);
+        match inflater.input(bytes.slice(input_pos, next_pos)) {
+          inflater::ConsumedRes => { },
+          inflater::FinishedRes(rest) if rest.is_empty() => { },
+          other => fail!(fmt!("Unexpected res %?", other)),
+        };
+        input_pos = next_pos;
+      }
+
+      assert!(inflater.has_finished());
+    };
+  }
+
 }

@@ -6,6 +6,9 @@
 extern mod comprsr_recv
   (vers = "0.0.1", author = "github.com/honzasp");
 
+#[cfg(test)]
+extern mod extra;
+
 pub mod inflate {
   pub use inflate::error::*;
   pub use inflate::inflater::{Inflater,Res,ConsumedRes,FinishedRes,ErrorRes};

@@ -152,8 +152,11 @@ impl<'self> BitReader<'self> {
 
 #[cfg(test)]
 mod test {
-  use inflate::bits::*;
+  use extra::test;
+  use std::rand;
+  use std::vec;
 
+  use inflate::bits::*;
   use inflate::inflater;
   use inflate::error;
 
@@ -388,5 +391,97 @@ mod test {
       None
     };
   }
-}
 
+  #[bench]
+  fn bench_bits(b: &mut test::BenchHarness) {
+    let bytes = vec::from_fn(850, |_| rand::random());
+
+    do b.iter {
+      do BitReader::with_buf(&mut BitBuf::new(), bytes) |reader| {
+        for 100.times {
+          assert!(reader.has_bits(5));
+          reader.read_bits8(5);
+        }
+
+        for 200.times {
+          assert!(reader.has_bits(13));
+          reader.read_bits16(13);
+        }
+
+        for 1000.times {
+          assert!(reader.has_bits(1));
+          reader.read_bits8(1);
+        }
+
+        for 300.times {
+          assert!(reader.has_bits(5));
+          reader.read_bits8(3);
+          reader.read_bits8(2);
+        }
+
+        for 200.times {
+          assert!(reader.has_bits(5));
+          let x = reader.read_bits8(5);
+          reader.unread_bits8(5, x);
+          assert!(reader.has_bits(13));
+          let y = reader.read_bits16(13);
+          reader.unread_bits16(13, y);
+        }
+
+        for 100.times {
+          assert!(reader.has_bits(9));
+          reader.read_bits16(9);
+        }
+
+        // skip the rest
+        reader.skip_to_byte();
+        reader.read_byte_chunk(1000);
+        None
+      };
+    };
+  }
+
+  #[bench]
+  fn bench_rev_bits(b: &mut test::BenchHarness) {
+    let bytes = vec::from_fn(850, |_| rand::random());
+
+    do b.iter {
+      do BitReader::with_buf(&mut BitBuf::new(), bytes) |reader| {
+        for 400.times {
+          for (&[3u, 1, 6, 4, 1, 1]).iter().advance |&b| {
+            assert!(reader.has_bits(b));
+            reader.read_rev_bits8(b);
+          }
+        }
+
+        /* TODO: is this ever needed?
+        for 100.times {
+          for (&[9u, 16, 10, 11]).iter().advance |&b| {
+            assert!(reader.has_bits(b));
+            reader.read_rev_bits16(b);
+          }
+        }
+        */
+
+        reader.skip_to_byte();
+        reader.read_byte_chunk(1000);
+        None
+      };
+    };
+  }
+
+  #[bench]
+  fn bench_bytes(b: &mut test::BenchHarness) {
+    let bytes = vec::from_fn(12_345, |_| rand::random());
+
+    do b.iter {
+      do BitReader::with_buf(&mut BitBuf::new(), bytes) |reader| {
+        reader.skip_to_byte();
+        while reader.has_bytes(4) {
+          reader.read_byte_chunk(32);
+        }
+        None
+      };
+    };
+  }
+}
