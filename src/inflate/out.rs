@@ -20,7 +20,7 @@ impl<R: recv::Receiver<u8>> Output<R> {
     }
   }
 
-  pub fn finish(self) -> ~R {
+  pub fn close(self) -> ~R {
     self.receiver
   }
 
@@ -120,7 +120,7 @@ mod test {
     out.send_literal(20);
     out.send_literal(30);
     out.flush();
-    let buf = *out.finish();
+    let buf = *out.close();
 
     assert_eq!(buf, ~[10, 20, 30]);
   }
@@ -136,7 +136,7 @@ mod test {
       out.send_literal_chunk(&[6,7,8,9]);
       out.flush();
 
-      let buf = *out.finish();
+      let buf = *out.close();
       assert_eq!(buf, ~[1,2,3,4,5,6,7,8,9]);
     }
 
@@ -149,7 +149,7 @@ mod test {
       out.send_literal_chunk(&[9,10,11,12,13,14,15,16,17,18,19,20]);
       out.flush();
 
-      let buf = *out.finish();
+      let buf = *out.close();
       assert_eq!(buf, ~[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]);
     }
   }
@@ -165,7 +165,7 @@ mod test {
       assert_eq!(out.back_reference(2, 5), Ok(()));
       out.flush();
 
-      let buf = *out.finish();
+      let buf = *out.close();
       assert_eq!(buf, ~[2,3,5,7,11,7,11,7,11,7]);
     };
 
@@ -179,7 +179,7 @@ mod test {
       assert_eq!(out.back_reference(5, 4), Ok(()));
       out.flush();
 
-      let buf = *out.finish();
+      let buf = *out.close();
       assert_eq!(buf, ~[2,3,5,7,11,13,17,19,23,29,31,17,19,23,29]);
     };
 
@@ -191,7 +191,7 @@ mod test {
       assert_eq!(out.back_reference(4,6), Ok(()));
       out.flush();
 
-      let buf = *out.finish();
+      let buf = *out.close();
       assert_eq!(buf, ~[2,3,5,7,2,3,5,7,2,3]);
     };
   }
@@ -208,7 +208,7 @@ mod test {
       out.send_literal_chunk(&[4,5,6]);
       out.flush();
 
-      let buf = *out.finish();
+      let buf = *out.close();
       assert_eq!(buf, ~[1,2,3,4,5,6]);
     }
 
@@ -222,7 +222,7 @@ mod test {
       out.send_literal_chunk(&[9,10,11]);
       out.flush();
 
-      let buf = *out.finish();
+      let buf = *out.close();
       assert_eq!(buf, ~[1,2,3,4,5,6,7,8,9,10,11]);
     }
   }

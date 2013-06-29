@@ -40,7 +40,7 @@ impl<R: recv::Receiver<u8>> Decoder<R> {
     }
   }
 
-  pub fn finish(self) -> ~R {
+  pub fn close(self) -> ~R {
     if self.opt_recv.is_some() {
       if self.opt_infl.is_some() {
         fail!(~"Both self.opt_recv and self.opt_infl are Some");
@@ -49,7 +49,7 @@ impl<R: recv::Receiver<u8>> Decoder<R> {
       }
     } else {
       if self.opt_infl.is_some() {
-        let (recv, _a32) = self.opt_infl.unwrap().finish().finish();
+        let (recv, _a32) = self.opt_infl.unwrap().close().close();
         recv
       } else {
         fail!(~"Neither self.opt_recv nor self.opt_infl are Some");
@@ -116,14 +116,14 @@ impl<R: recv::Receiver<u8>> Decoder<R> {
             inflater::ErrorRes(error, inflate_rest) => {
               rest = inflate_rest;
               let inflater = self.opt_infl.swap_unwrap();
-              let (recv, _a32) = inflater.finish().finish();
+              let (recv, _a32) = inflater.close().close();
               self.opt_recv = Some(recv);
               ErrorStage(~error::InflateError(error))
             },
             inflater::FinishedRes(inflate_rest) => {
               rest = inflate_rest;
               let inflater = self.opt_infl.swap_unwrap();
-              let (recv, a32) = inflater.finish().finish();
+              let (recv, a32) = inflater.close().close();
               self.opt_recv = Some(recv);
               Adler32Stage(a32.adler32())
             },
@@ -196,7 +196,7 @@ mod test {
     let mut decoder = decoder::Decoder::new(~buf);
 
     match decoder.input(bytes) {
-      decoder::FinishedRes(rest) if rest.is_empty() => *decoder.finish(),
+      decoder::FinishedRes(rest) if rest.is_empty() => *decoder.close(),
       x => fail!(fmt!("decode_ok: unexpected Res %?", x)),
     }
   }

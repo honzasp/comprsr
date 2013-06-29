@@ -6,7 +6,7 @@ pub fn inflate_ok(bytes: &[u8]) -> ~[u8] {
   let buf = ~[];
   let mut inflater = inflater::Inflater::new(~buf);
   match inflater.input(bytes) {
-    inflater::FinishedRes(rest) if rest.is_empty() => *inflater.finish(),
+    inflater::FinishedRes(rest) if rest.is_empty() => *inflater.close(),
     x => fail!(fmt!("inflate_ok: unexpected Res %?", x)),
   }
 }

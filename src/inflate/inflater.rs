@@ -43,8 +43,8 @@ impl<R: recv::Receiver<u8>> Inflater<R> {
     }
   }
 
-  pub fn finish(self) -> ~R {
-    self.output.finish()
+  pub fn close(self) -> ~R {
+    self.output.close()
   }
 
   pub fn input<'a>(&mut self, chunk: &'a [u8]) -> Res<&'a [u8]> {
@@ -155,7 +155,7 @@ mod test {
         10, 20, 30, 40, 50, 60, 70, 80, 90, 100
       ]);
 
-    let buf = *inflater.finish();
+    let buf = *inflater.close();
     assert_eq!(buf, ~[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
   }
 }

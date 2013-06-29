@@ -40,7 +40,7 @@ pub mod recv {
     }
 
     #[inline]
-    pub fn finish(self) -> (~RA, ~RB) {
+    pub fn close(self) -> (~RA, ~RB) {
       match self {
         ForkReceiver { recvA: recvA, recvB: recvB } => (recvA, recvB)
       }
@@ -101,7 +101,7 @@ mod test {
       let mut fork_recv = recv::ForkReceiver::new(~bufA, ~bufB);
       fork_recv.receive(&[1, 1, 2, 3]);
       fork_recv.receive(&[5, 8, 13]);
-      let (bufA, bufB) = fork_recv.finish();
+      let (bufA, bufB) = fork_recv.close();
 
       assert_eq!(bufA, ~~[1, 1, 2, 3, 5, 8, 13]);
       assert_eq!(bufB, ~~[1, 1, 2, 3, 5, 8, 13]);
