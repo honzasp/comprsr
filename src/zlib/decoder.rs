@@ -8,12 +8,14 @@ use std::uint;
 struct Decoder<R> {
   priv stage: Stage<R>,
   priv waiting: ~[u8],
+  // TODO: this could be better represented
   priv opt_recv: Option<~R>,
   priv opt_infl: Option<~inflater::Inflater<
       bits::recv::ForkReceiver<u8, R, adler32::Adler32>
     >>,
 }
 
+// TODO: move the common part to crate "bits"?
 #[deriving(Eq)]
 pub enum Res<A> {
   pub ConsumedRes(),
@@ -176,6 +178,7 @@ impl<R: bits::recv::Receiver<u8>> Decoder<R> {
     }
   }
 
+  // TODO: rename to has_error?
   pub fn is_error(&self) -> bool {
     self.get_error().is_some()
   }
@@ -291,5 +294,7 @@ mod test {
         ), &[7, 8, 9])
     );
   }
+
+  // TODO: test also decoding with multiple chunks
 
 }
