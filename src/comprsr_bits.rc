@@ -1,0 +1,22 @@
+#[link(name = "comprsr_bits")];
+#[link(vers = "0.0.1")];
+#[link(author = "github.com/honzasp")];
+#[crate_type = "lib"];
+
+#[cfg(test)]
+extern mod extra;
+
+pub use bits::bit_reader::{BitReader};
+pub use bits::bit_buf::{BitBuf};
+//pub use bits::recv;
+
+pub mod recv {
+  pub use bits::recv::*;
+}
+
+mod bits {
+  mod bit_reader;
+  mod bit_buf;
+  mod recv;
+}
+

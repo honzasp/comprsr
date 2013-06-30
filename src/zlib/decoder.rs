@@ -1,4 +1,4 @@
-use recv;
+use bits;
 use inflate::inflater;
 use checksums::adler32;
 use zlib::error;
@@ -10,7 +10,7 @@ struct Decoder<R> {
   priv waiting: ~[u8],
   priv opt_recv: Option<~R>,
   priv opt_infl: Option<~inflater::Inflater<
-      recv::ForkReceiver<u8, R, adler32::Adler32>
+      bits::recv::ForkReceiver<u8, R, adler32::Adler32>
     >>,
 }
 
@@ -30,7 +30,7 @@ enum Stage<R> {
   EndStage,
 }
 
-impl<R: recv::Receiver<u8>> Decoder<R> {
+impl<R: bits::recv::Receiver<u8>> Decoder<R> {
   pub fn new(receiver: ~R) -> Decoder<R> {
     Decoder { 
       stage: HeaderStage,
@@ -96,7 +96,7 @@ impl<R: recv::Receiver<u8>> Decoder<R> {
               if self.opt_recv.is_some() {
                 let recv = self.opt_recv.swap_unwrap();
                 let a32 = ~adler32::Adler32::new();
-                let fork_recv = ~recv::ForkReceiver::new(recv, a32);
+                let fork_recv = ~bits::recv::ForkReceiver::new(recv, a32);
                 let inflater = ~inflater::Inflater::new(fork_recv);
                 self.opt_infl = Some(inflater);
                 DataStage

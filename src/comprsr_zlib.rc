@@ -3,26 +3,18 @@
 #[link(author = "github.com/honzasp")];
 #[crate_type = "lib"];
 
-extern mod comprsr_inflate
-  (vers = "0.0.1", author = "github.com/honzasp");
-extern mod comprsr_checksums
-  (vers = "0.0.1", author = "github.com/honzasp");
-extern mod comprsr_recv
-  (vers = "0.0.1", author = "github.com/honzasp");
+extern mod _inflate (name = "comprsr_inflate",
+  vers = "0.0.1", author = "github.com/honzasp");
+extern mod _checksums (name = "comprsr_checksums",
+  vers = "0.0.1", author = "github.com/honzasp");
+extern mod bits (name = "comprsr_bits",
+  vers = "0.0.1", author = "github.com/honzasp");
+
+pub use inflate = _inflate::inflate;
+pub use checksums = _checksums::checksums;
 
 pub mod zlib {
   pub mod decoder;
   pub mod error;
 }
 
-pub mod inflate {
-  pub use comprsr_inflate::inflate::{inflater, error};
-}
-
-pub mod checksums {
-  pub use comprsr_checksums::checksums::{adler32};
-}
-
-pub mod recv {
-  pub use comprsr_recv::recv::*;
-}

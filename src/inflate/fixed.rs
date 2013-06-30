@@ -1,4 +1,4 @@
-use inflate::bits;
+use bits;
 use inflate::compressed;
 
 pub type BlockState = compressed::BlockState<BlockExtra>;

@@ -1,4 +1,4 @@
-use recv;
+use bits;
 use inflate::error;
 use std::{vec, uint};
 
@@ -10,7 +10,7 @@ pub struct Output<R> {
   priv cache_pos: uint,
 }
 
-impl<R: recv::Receiver<u8>> Output<R> {
+impl<R: bits::recv::Receiver<u8>> Output<R> {
   pub fn new<'a>(window_size: uint, receiver: ~R) -> Output<R> {
     Output {
       receiver: receiver,

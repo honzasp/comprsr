@@ -1,5 +1,4 @@
-use recv;
-use inflate::bits;
+use bits;
 use inflate::error;
 use inflate::out;
 
@@ -29,9 +28,12 @@ pub trait BlockExtra {
     -> Option<uint>;
 }
 
-impl<E: BlockExtra, R: recv::Receiver<u8>> BlockState<E> {
-  pub fn input(&mut self, bit_reader: &mut bits::BitReader, out: &mut out::Output<R>)
-    -> Option<Result<(),~error::Error>>
+impl<E: BlockExtra, R: bits::recv::Receiver<u8>> BlockState<E> {
+  pub fn input(
+    &mut self,
+    bit_reader: &mut bits::BitReader,
+    out: &mut out::Output<R>
+  ) -> Option<Result<(),~error::Error>>
   {
     loop {
       self.phase = match self.phase {

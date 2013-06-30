@@ -40,8 +40,8 @@ testcomprsr_%~: src/comprsr_%.rc src/%/*.rs
 clean:
 	rm -f testcomprsr_*~ libcomprsr_*.dummy libcomprsr_*.so
 
-libcomprsr_zlib.dummy testcomprsr_zlib~: libcomprsr_inflate.dummy libcomprsr_checksums.dummy libcomprsr_recv.dummy
+libcomprsr_zlib.dummy testcomprsr_zlib~: libcomprsr_inflate.dummy libcomprsr_checksums.dummy libcomprsr_bits.dummy
 
-libcomprsr_checksums.dummy testcomprsr_checksums~: libcomprsr_recv.dummy
+libcomprsr_checksums.dummy testcomprsr_checksums~: libcomprsr_bits.dummy
 
-libcomprsr_inflate.dummy testcomprsr_inflate~: libcomprsr_recv.dummy
+libcomprsr_inflate.dummy testcomprsr_inflate~: libcomprsr_bits.dummy

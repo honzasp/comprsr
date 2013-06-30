@@ -1,5 +1,4 @@
-use recv;
-use inflate::bits;
+use bits;
 use inflate::dynamic;
 use inflate::error;
 use inflate::fixed;
@@ -33,7 +32,7 @@ enum Stage {
 
 pub static window_size: uint = 32_768;
 
-impl<R: recv::Receiver<u8>> Inflater<R> {
+impl<R: bits::recv::Receiver<u8>> Inflater<R> {
   pub fn new(receiver: ~R) -> Inflater<R> {
     Inflater {
       stage: HeaderStage,
@@ -48,7 +47,9 @@ impl<R: recv::Receiver<u8>> Inflater<R> {
   }
 
   pub fn input<'a>(&mut self, chunk: &'a [u8]) -> Res<&'a [u8]> {
-    do bits::BitReader::with_buf(&mut self.bit_buf, chunk) |bit_reader| {
+    let result = do bits::BitReader::with_buf(&mut self.bit_buf, chunk)
+      |bit_reader| 
+    {
       // TODO: Rust doesn't support `return` from lambdas !!!
       let mut ret = None;
 
@@ -106,6 +107,12 @@ impl<R: recv::Receiver<u8>> Inflater<R> {
 
       self.output.flush();
       ret
+    };
+
+    match result {
+      None => ConsumedRes,
+      Some((Ok(()), rest)) => FinishedRes(rest),
+      Some((Err(err), rest)) => ErrorRes(err, rest),
     }
   }
 

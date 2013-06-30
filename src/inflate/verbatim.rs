@@ -1,5 +1,4 @@
-use recv;
-use inflate::bits;
+use bits;
 use inflate::error;
 use inflate::out;
 
@@ -23,7 +22,7 @@ impl BlockState {
     BlockState { phase: BeginPhase, len: 0, nlen: 0, remaining: 0 }
   }
 
-  pub fn input<R: recv::Receiver<u8>>(
+  pub fn input<R: bits::recv::Receiver<u8>>(
     &mut self,
     bit_reader: &mut bits::BitReader,
     out: &mut out::Output<R>

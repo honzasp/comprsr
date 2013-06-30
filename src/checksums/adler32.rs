@@ -1,4 +1,4 @@
-use recv::{Receiver};
+use bits::recv::{Receiver};
 
 struct Adler32 {
   priv s1: u32,
@@ -42,7 +42,7 @@ impl Receiver<u8> for Adler32 {
 #[cfg(test)]
 mod test {
   use checksums::adler32;
-  use recv::{Receiver};
+  use bits::recv::{Receiver};
 
   fn adler32(bytes: &[u8]) -> u32 {
     let mut a32 = adler32::Adler32::new();

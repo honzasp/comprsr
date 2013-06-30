@@ -1,4 +1,4 @@
-use inflate::bits;
+use bits;
 use inflate::compressed;
 use inflate::error;
 use inflate::huff;
@@ -226,8 +226,9 @@ mod test {
   use extra::test;
   use std::rand;
   use std::rand::{RngUtil};
+
+  use bits;
   use inflate::huff;
-  use inflate::bits;
   use inflate::dynamic;
   use inflate::test_helpers::*;
 
@@ -291,7 +292,7 @@ mod test {
         for 1000.times {
           dynamic::read_huff_code(reader, &tree);
         }
-        Some(Ok(()))
+        Some(())
       };
     };
   }
