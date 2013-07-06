@@ -1,6 +1,5 @@
 use inflate::error;
 use std::uint;
-use std::vec;
 
 pub struct Tree {
   priv nodes: ~[u16],
@@ -22,8 +21,8 @@ impl Tree {
       let bl = bl8 as uint;
       if bl > 0 {
         if bl > max_bl {
-          vec::grow(&mut bl_count, bl - max_bl, &0);
-          vec::grow(&mut bl_syms, bl - max_bl, &~[]);
+          bl_count.grow(bl - max_bl, &0);
+          bl_syms.grow(bl - max_bl, &~[]);
           max_bl = bl;
         }
         bl_count[bl] += 1;
@@ -44,7 +43,7 @@ impl Tree {
         let one_n: u16 = zero_n + 1;
         nodes[front_n] = zero_n << 1;
 
-        vec::grow(&mut nodes, 2, &0xffff);
+        nodes.grow(2, &0xffff);
         new_front.push(zero_n);
         new_front.push(one_n);
       }
