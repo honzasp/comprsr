@@ -1,5 +1,5 @@
 RUSTC = rustc
-RUSTC_FLAGS         = -L .
+RUSTC_FLAGS         = -L . -A non-uppercase-statics
 RUSTC_TEST_FLAGS    = $(RUSTC_FLAGS) 
 RUSTC_COMPILE_FLAGS = $(RUSTC_FLAGS)
 
@@ -12,10 +12,6 @@ ALL_BENCHS   = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]
 .PHONY: all all_tests unit_tests benchmarks func_tests clean
 
 all: $(ALL_DUMMIES)
-
-debug:
-	echo $(ALL_TESTS)
-	echo $(ALL_BENCHS)
 
 all_tests: unit_tests benchmarks func_tests 
 unit_tests: $(ALL_TESTS)

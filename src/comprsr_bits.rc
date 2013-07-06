@@ -14,9 +14,9 @@ pub mod recv {
   pub use bits::recv::*;
 }
 
-mod bits {
-  mod bit_reader;
-  mod bit_buf;
-  mod recv;
+pub mod bits {
+  pub mod bit_reader;
+  pub mod bit_buf;
+  pub mod recv;
 }
 
