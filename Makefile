@@ -38,6 +38,8 @@ clean:
 
 libcomprsr_zlib.dummy testcomprsr_zlib~: libcomprsr_inflate.dummy libcomprsr_checksums.dummy libcomprsr_bits.dummy
 
+libcomprsr_gzip.dummy testcomprsr_gzip~: libcomprsr_inflate.dummy libcomprsr_checksums.dummy libcomprsr_bits.dummy
+
 libcomprsr_checksums.dummy testcomprsr_checksums~: libcomprsr_bits.dummy
 
 libcomprsr_inflate.dummy testcomprsr_inflate~: libcomprsr_bits.dummy
