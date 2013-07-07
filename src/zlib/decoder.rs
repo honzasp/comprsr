@@ -108,23 +108,23 @@ impl<R: bits::recv::Receiver<u8>> Decoder<R> {
           },
           DataStage => {
             if byte_reader.has_some_bytes() {
-              match self.opt_infl.get_mut_ref().input(byte_reader.read_chunk()) {
-                inflater::ConsumedRes => 
-                  DataStage, // byte_reader may have more bytes
-                inflater::ErrorRes(error, inflate_rest) => {
-                  byte_reader.unread_chunk(inflate_rest);
-                  let inflater = self.opt_infl.swap_unwrap();
-                  let (recv, _a32) = inflater.close().close();
-                  self.opt_recv = Some(recv);
-                  ErrorStage(~error::InflateError(error))
-                },
-                inflater::FinishedRes(inflate_rest) => {
-                  byte_reader.unread_chunk(inflate_rest);
-                  let inflater = self.opt_infl.swap_unwrap();
-                  let (recv, a32) = inflater.close().close();
-                  self.opt_recv = Some(recv);
-                  Adler32Stage(a32.adler32())
-                },
+              do byte_reader.consume_chunk |chunk| {
+                match self.opt_infl.get_mut_ref().input(chunk) {
+                  inflater::ConsumedRes => 
+                    (DataStage, None),
+                  inflater::ErrorRes(error, inflate_rest) => {
+                    let inflater = self.opt_infl.swap_unwrap();
+                    let (recv, _a32) = inflater.close().close();
+                    self.opt_recv = Some(recv);
+                    (ErrorStage(~error::InflateError(error)), Some(inflate_rest))
+                  },
+                  inflater::FinishedRes(inflate_rest) => {
+                    let inflater = self.opt_infl.swap_unwrap();
+                    let (recv, a32) = inflater.close().close();
+                    self.opt_recv = Some(recv);
+                    (Adler32Stage(a32.adler32()), Some(inflate_rest))
+                  },
+                }
               }
             } else {
               break
