@@ -2,70 +2,85 @@ use bits;
 use inflate::error;
 use inflate::out;
 
-pub struct BlockState {
-  priv phase: BlockPhase,
+pub struct VerbState {
+  priv phase: VerbPhase,
   priv len: u16,
   priv nlen: u16,
   priv remaining: uint,
 }
 
-enum BlockPhase {
+enum VerbPhase {
   BeginPhase,
   LenPhase,
   NLenPhase,
   BeginDataPhase,
   DataPhase,
+  EndPhase,
+  ErrorPhase(~error::Error),
 }
 
-impl BlockState {
-  pub fn new() -> BlockState {
-    BlockState { phase: BeginPhase, len: 0, nlen: 0, remaining: 0 }
+impl VerbState {
+  pub fn new() -> VerbState {
+    VerbState { phase: BeginPhase, len: 0, nlen: 0, remaining: 0 }
   }
 
-  pub fn input<R: bits::recv::Receiver<u8>>(
-    &mut self,
+  pub fn input <R: bits::recv::Recv<u8>> (
+    self,
     bit_reader: &mut bits::BitReader,
     out: &mut out::Output<R>
   )
-    -> Option<Result<(),~error::Error>>
+    -> Either<VerbState, Result<(), ~error::Error>>
   {
+    let mut st = self;
+
     loop {
-      self.phase = match self.phase {
+      let res = match st.phase {
         BeginPhase => {
           bit_reader.skip_to_byte();
-          LenPhase
+          Some(LenPhase)
         },
         LenPhase => {
           if bit_reader.has_bytes(2) { 
-            self.len = bit_reader.read_u16();
-            NLenPhase
-          } else { return None }
+            st.len = bit_reader.read_u16();
+            Some(NLenPhase)
+          } else { None }
         }
         NLenPhase => {
           if bit_reader.has_bytes(2) {
-            self.nlen = bit_reader.read_u16();
-            BeginDataPhase
-          } else { return None }
+            st.nlen = bit_reader.read_u16();
+            Some(BeginDataPhase)
+          } else { None }
         },
         BeginDataPhase => {
-          if self.len == !self.nlen {
-            self.remaining = self.len as uint;
-            DataPhase
+          if st.len == !st.nlen {
+            st.remaining = st.len as uint;
+            Some(DataPhase)
           } else {
-            return Some(Err(~error::VerbatimLengthMismatch(self.len, self.nlen)));
+            Some(ErrorPhase(~error::VerbatimLengthMismatch(st.len, st.nlen)))
           }
         },
         DataPhase => {
-          let chunk = bit_reader.read_byte_chunk(self.remaining);
+          let chunk = bit_reader.read_byte_chunk(st.remaining);
           out.send_literal_chunk(chunk);
 
-          if chunk.len() < self.remaining {
-            self.remaining -= chunk.len();
-            return None
+          if chunk.len() < st.remaining {
+            st.remaining = st.remaining - chunk.len();
+            None
           } else {
-            return Some(Ok(()));
+            Some(EndPhase)
           }
+        },
+        EndPhase => {
+          return Right(Ok(()))
+        },
+        ErrorPhase(err) => {
+          return Right(Err(err))
         }
+      };
+
+      match res {
+        None => return Left(st), 
+        Some(next_phase) => st.phase = next_phase,
       }
     }
   }
@@ -177,15 +192,15 @@ mod test {
     }
 
     do b.iter {
-      let mut inflater = inflater::Inflater::new(~());
+      let mut inflater = inflater::Inflater::new(());
       let mut input_pos = 0;
 
       while input_pos < bytes.len() {
         let next_pos = cmp::min(bytes.len(), input_pos + 1024);
         match inflater.input(bytes.slice(input_pos, next_pos)) {
-          inflater::ConsumedRes => { },
-          inflater::FinishedRes(rest) if rest.is_empty() => { },
-          other => fail!(fmt!("Unexpected res %?", other)),
+          Left(new_infl) => inflater = new_infl,
+          Right((Ok(()), [])) => { },
+          other => fail!(fmt!("Unexpected result %?", other)),
         };
         input_pos = next_pos;
       }

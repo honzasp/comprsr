@@ -1,10 +1,9 @@
 use bits;
 use inflate::compressed;
 
-pub type BlockState = compressed::BlockState<BlockExtra>;
-struct BlockExtra();
+struct FixedCoder();
 
-impl compressed::BlockExtra for BlockExtra {
+impl compressed::Coder for FixedCoder {
   fn read_litlen_code(&self, bit_reader: &mut bits::BitReader)
     -> Option<uint>
   {
@@ -18,12 +17,9 @@ impl compressed::BlockExtra for BlockExtra {
   }
 }
 
-// TODO: impl BlockState { fn new() }
-// (was blocked by a compiler error which seems to be incorrect)
-pub fn new_block_state() -> BlockState {
-  compressed::BlockState {
-    phase: compressed::LitlenPhase,
-    extra: BlockExtra,
+impl FixedCoder {
+  pub fn new() -> FixedCoder {
+    FixedCoder
   }
 }
 

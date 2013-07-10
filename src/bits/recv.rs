@@ -1,65 +1,48 @@
-pub trait Receiver<A> {
-  pub fn receive(&mut self, elems: &[A]);
+use std::vec;
+
+pub trait Recv<X> {
+  pub fn receive(self, xs: &[X]) -> Self;
 }
 
-struct FnReceiver<'self, A> {
-  priv func: &'self fn(&[A]),
+pub struct SplitRecv<X, L, R> {
+  priv left: L,
+  priv right: R,
 }
 
-impl<'self, A> FnReceiver<'self, A> {
-  #[inline]
-  pub fn new<'a>(func: &'a fn(&[A])) -> FnReceiver<'a, A> {
-    FnReceiver { func: func }
+impl<X, L, R> SplitRecv<X, L, R> {
+  pub fn new(r1: L, r2: R) -> SplitRecv<X, L, R> {
+    SplitRecv { left: r1, right: r2 }
+  }
+
+  pub fn close(self) -> (L, R) {
+    let SplitRecv { left, right } = self;
+    (left, right)
   }
 }
 
-impl<'self, A> Receiver<A> for FnReceiver<'self, A> {
-  #[inline]
-  pub fn receive(&mut self, elems: &[A]) {
-    (self.func)(elems);
+impl<X, L: Recv<X>, R: Recv<X>> Recv<X> for SplitRecv<X, L, R> {
+  pub fn receive(self, xs: &[X]) -> SplitRecv<X, L, R> {
+    let SplitRecv { left, right } = self;
+    let new_left = left.receive(xs);
+    let new_right = right.receive(xs);
+    SplitRecv { left: new_left, right: new_right }
   }
 }
 
-struct ForkReceiver<A, RA, RB> {
-  priv recvA: ~RA,
-  priv recvB: ~RB,
-}
-
-impl<A, RA, RB> ForkReceiver<A, RA, RB> {
-  #[inline]
-  pub fn new(recvA: ~RA, recvB: ~RB) 
-    -> ForkReceiver<A, RA, RB>
-  {
-    ForkReceiver { recvA: recvA, recvB: recvB }
-  }
-
-  #[inline]
-  pub fn close(self) -> (~RA, ~RB) {
-    match self {
-      ForkReceiver { recvA: recvA, recvB: recvB } => (recvA, recvB)
-    }
+impl<X: Copy> Recv<X> for ~[X] {
+  pub fn receive(self, xs: &[X]) -> ~[X] {
+    vec::append(self, xs)
   }
 }
 
-impl<A, RA: Receiver<A>, RB: Receiver<A>>
-  Receiver<A> for ForkReceiver<A, RA, RB>
-{
-  pub fn receive(&mut self, elems: &[A]) {
-    self.recvA.receive(elems);
-    self.recvB.receive(elems);
+impl<'self, X> Recv<X> for &'self fn(&[X]) {
+  pub fn receive(self, xs: &[X]) -> &'self fn(&[X]) {
+    (self)(xs); self
   }
 }
 
-impl<A: Copy> Receiver<A> for ~[A] {
-  #[inline]
-  pub fn receive(&mut self, elems: &[A]) {
-    self.push_all(elems);
-  }
-}
-
-impl<A> Receiver<A> for () {
-  #[inline]
-  pub fn receive(&mut self, elems: &[A]) {
+impl<X> Recv<X> for () {
+  pub fn receive(self, elems: &[X]) -> () {
     let _ = elems;
   }
 }
@@ -69,51 +52,45 @@ mod test {
   use recv;
 
   #[test]
-  fn test_fn_recv() {
-    let mut buf = ~[];
-    let callback: &fn(&[bool]) = |elems| buf.push(elems.to_owned());
-    let mut fn_recv = recv::FnReceiver::new(callback);
-
-    fn_recv.receive(&[true, false]);
-    fn_recv.receive(&[]);
-    fn_recv.receive(&[false, false, true]);
-    fn_recv.receive(&[true]);
-
-    assert_eq!(buf, ~[
-        ~[true, false], ~[], ~[false, false, true], ~[true]
-      ]);
-  }
-
-  #[test]
-  fn test_fork_recv() {
+  fn test_split_recv() {
     let bufA = ~[];
     let bufB = ~[];
     
-    {
-      let mut fork_recv = recv::ForkReceiver::new(~bufA, ~bufB);
-      fork_recv.receive(&[1, 1, 2, 3]);
-      fork_recv.receive(&[5, 8, 13]);
-      let (bufA, bufB) = fork_recv.close();
+    let recv = recv::SplitRecv {
+        left: bufA, right: bufB
+      };
+    
+    let recv = recv.receive(&[1, 1, 2, 3]);
+    let recv = recv.receive(&[5, 8, 13]);
+    let (bufA, bufB) = recv.close();
 
-      assert_eq!(bufA, ~~[1, 1, 2, 3, 5, 8, 13]);
-      assert_eq!(bufB, ~~[1, 1, 2, 3, 5, 8, 13]);
-    }
+    assert_eq!(bufA, ~[1, 1, 2, 3, 5, 8, 13]);
+    assert_eq!(bufB, ~[1, 1, 2, 3, 5, 8, 13]);
   }
 
   #[test]
   fn test_vec_recv() {
-    let mut buf = ~[];
-
-    buf.receive(&['a', 'b', 'c']);
-    buf.receive(&['d', 'e']);
+    let buf = ~[];
+    let buf = buf.receive(&['a', 'b', 'c']);
+    let buf = buf.receive(&['d', 'e']);
 
     assert_eq!(buf, ~['a', 'b', 'c', 'd', 'e']);
   }
 
   #[test]
+  fn test_fn_recv() {
+    let mut buf = ~[];
+    let fun: &fn(&[bool]) = |xs| buf.push_all(xs);
+    let fun = fun.receive(&[true, false, true]);
+    let fun = fun.receive(&[true, true]);
+    let _ = fun;
+
+    assert_eq!(buf, ~[true, false, true, true, true]);
+  }
+
+  #[test]
   fn test_unit_recv() {
-    let unit_recv = &mut ();
-    unit_recv.receive(&[1, 2, 3]);
-    unit_recv.receive(&[4, 5]);
+    let unit_recv = ();
+    let _ = unit_recv.receive(&[1, 2, 3]);
   }
 }

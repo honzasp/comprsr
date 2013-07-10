@@ -11,7 +11,7 @@ extern mod extra;
 
 pub mod inflate {
   pub use inflate::error::*;
-  pub use inflate::inflater::{Inflater,Res,ConsumedRes,FinishedRes,ErrorRes};
+  pub use inflate::inflater::{Inflater};
 
   pub mod compressed;
   pub mod dynamic;

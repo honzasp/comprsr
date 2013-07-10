@@ -2,11 +2,13 @@ use bits;
 use inflate::error;
 use inflate::out;
 
-pub enum BlockPhase {
+pub enum CompressedPhase {
   LitlenPhase,
   LenExtraPhase(uint,uint), /* (base_len,extra_bits) */
   DistPhase(uint), /* (len) */
   DistExtraPhase(uint,uint,uint), /* (len,base_dist,extra_bits) */
+  ErrorPhase(~error::Error),
+  EndPhase,
 }
 
 #[deriving(Eq)]
@@ -16,75 +18,100 @@ pub enum LitlenCode {
   BlockEndCode,
 }
 
-pub struct BlockState<E> {
-  pub phase: BlockPhase,
-  pub extra: E,
+pub struct ComprState<C> {
+  priv phase: CompressedPhase,
+  priv coder: C,
 }
 
-pub trait BlockExtra {
+pub trait Coder {
   fn read_litlen_code(&self, bit_reader: &mut bits::BitReader)
     -> Option<uint>;
   fn read_dist_code(&self, bit_reader: &mut bits::BitReader) 
     -> Option<uint>;
 }
 
-impl<E: BlockExtra, R: bits::recv::Receiver<u8>> BlockState<E> {
-  pub fn input(
-    &mut self,
+impl<C: Coder> ComprState<C> {
+  pub fn new(coder: C) -> ComprState<C> {
+    ComprState {
+      phase: LitlenPhase,
+      coder: coder
+    }
+  }
+
+  pub fn input<R: bits::recv::Recv<u8>> (
+    self,
     bit_reader: &mut bits::BitReader,
     out: &mut out::Output<R>
-  ) -> Option<Result<(),~error::Error>>
+  ) 
+    -> Either<ComprState<C>, Result<(), ~error::Error>>
   {
+    let mut st = self;
+
     loop {
-      self.phase = match self.phase {
-        LitlenPhase => 
-          match self.extra.read_litlen_code(bit_reader) {
+      let res = match st.phase {
+        LitlenPhase => {
+          match st.coder.read_litlen_code(bit_reader) {
             Some(code) => match decode_litlen(code) {
                 Ok(litlen) => match litlen {
                   LiteralCode(byte) => {
                     out.send_literal(byte);
-                    LitlenPhase
+                    Some(LitlenPhase)
                   },
                   LengthCode(len, 0) =>
-                    DistPhase(len),
+                    Some(DistPhase(len)),
                   LengthCode(len_base, len_extra_bits) =>
-                    LenExtraPhase(len_base, len_extra_bits),
+                    Some(LenExtraPhase(len_base, len_extra_bits)),
                   BlockEndCode => 
-                    return Some(Ok(())),
+                    Some(EndPhase)
                 },
                 Err(err) =>
-                  return Some(Err(err)),
+                  Some(ErrorPhase(err))
               },
-            None => return None,
-          },
-        LenExtraPhase(len_base, len_extra_bits) =>
+            None => None,
+          }
+        },
+        LenExtraPhase(len_base, len_extra_bits) => {
           if bit_reader.has_bits(len_extra_bits) {
             let extra = bit_reader.read_bits8(len_extra_bits);
-            DistPhase(len_base + extra as uint)
+            Some(DistPhase(len_base + extra as uint))
           } else {
-            return None;
-          },
-        DistPhase(len) => 
-          match self.extra.read_dist_code(bit_reader) {
+            None
+          }
+        },
+        DistPhase(len) => {
+          match st.coder.read_dist_code(bit_reader) {
             Some(dist_code) => match decode_dist(dist_code) {
-              Ok((dist_base,dist_extra_bits)) =>
-                DistExtraPhase(len,dist_base,dist_extra_bits),
+              Ok((dist_base, dist_extra_bits)) =>
+                Some(DistExtraPhase(len, dist_base, dist_extra_bits)),
               Err(err) =>
-                return Some(Err(err)),
+                Some(ErrorPhase(err)),
             },
-            None => return None,
-          },
-        DistExtraPhase(len,dist_base,dist_extra_bits) =>
+            None => None,
+          }
+        },
+        DistExtraPhase(len, dist_base, dist_extra_bits) => {
           if bit_reader.has_bits(dist_extra_bits) {
             let dist_extra = bit_reader.read_bits16(dist_extra_bits);
             let dist = dist_base + dist_extra as uint;
             match out.back_reference(dist, len) {
-              Ok(()) => LitlenPhase,
-              Err(err) => return Some(Err(err)),
+              Ok(()) => Some(LitlenPhase),
+              Err(err) => Some(ErrorPhase(err)),
             }
           } else {
-            return None;
-          },
+            None
+          }
+        },
+        EndPhase => {
+          return Right(Ok(()))
+        },
+        ErrorPhase(err) => {
+          return Right(Err(err))
+        },
+      };
+
+      match res {
+        None => return Left(st),
+        Some(next_phase) => st.phase = next_phase,
       }
     }
   }
