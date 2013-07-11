@@ -9,23 +9,10 @@ pub struct SplitRecv<X, L, R> {
   priv right: R,
 }
 
-impl<X, L, R> SplitRecv<X, L, R> {
-  pub fn new(r1: L, r2: R) -> SplitRecv<X, L, R> {
-    SplitRecv { left: r1, right: r2 }
-  }
-
-  pub fn close(self) -> (L, R) {
-    let SplitRecv { left, right } = self;
-    (left, right)
-  }
-}
-
-impl<X, L: Recv<X>, R: Recv<X>> Recv<X> for SplitRecv<X, L, R> {
-  pub fn receive(self, xs: &[X]) -> SplitRecv<X, L, R> {
-    let SplitRecv { left, right } = self;
-    let new_left = left.receive(xs);
-    let new_right = right.receive(xs);
-    SplitRecv { left: new_left, right: new_right }
+impl<X, L: Recv<X>, R: Recv<X>> Recv<X> for (L, R) {
+  pub fn receive(self, xs: &[X]) -> (L, R) {
+    let (left, right) = self;
+    (left.receive(xs), right.receive(xs))
   }
 }
 
@@ -49,20 +36,13 @@ impl<X> Recv<X> for () {
 
 #[cfg(test)]
 mod test {
-  use recv;
 
   #[test]
-  fn test_split_recv() {
-    let bufA = ~[];
-    let bufB = ~[];
-    
-    let recv = recv::SplitRecv {
-        left: bufA, right: bufB
-      };
-    
+  fn test_pair_recv() {
+    let recv = (~[], ~[]);
     let recv = recv.receive(&[1, 1, 2, 3]);
     let recv = recv.receive(&[5, 8, 13]);
-    let (bufA, bufB) = recv.close();
+    let (bufA, bufB) = recv;
 
     assert_eq!(bufA, ~[1, 1, 2, 3, 5, 8, 13]);
     assert_eq!(bufB, ~[1, 1, 2, 3, 5, 8, 13]);

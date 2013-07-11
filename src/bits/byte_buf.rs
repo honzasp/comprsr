@@ -26,12 +26,13 @@ impl ByteBuf {
     self.buf.push_all(bytes);
   }
 
-  pub fn consume_buf<'a, T>(
+  pub fn consume_buf<'a, A, T>(
     &mut self,
-    body: &fn(&'a [u8]) -> (T, Option<&'a [u8]>)
+    arg: A,
+    body: &once fn(A, &'a [u8]) -> (T, Option<&'a [u8]>)
   ) -> T {
     let (x, new_buf) = 
-      match body(self.buf) {
+      match body(arg, self.buf) {
         (x, None)       => (x, ~[]),
         (x, Some(rest)) => (x, rest.to_owned()),
       };

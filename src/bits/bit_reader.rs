@@ -27,7 +27,8 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn close(self) -> (BitBuf, &'self [u8]) {
-    (self.bit_buf, self.rest_bytes)
+    let BitReader { bit_buf, rest_bytes } = self;
+    (bit_buf, rest_bytes)
   }
 
   pub fn has_bits(&self, bits: uint) -> bool {

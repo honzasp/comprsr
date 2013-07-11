@@ -6,38 +6,20 @@ pub struct ByteReader<'self> {
 }
 
 impl<'self> ByteReader<'self> {
-  pub fn with_buf<'a, R>(
-    byte_buf: &mut ByteBuf,
-    chunk: &'a [u8],
-    body: &fn(&mut ByteReader) -> Option<R>
-  ) -> Option<(R, &'a [u8])>
-  {
-    // TODO: is it possible to avoid cloning the byte_buf?
+  pub fn new<'a>(byte_buf: ByteBuf, chunk: &'a [u8]) -> ByteReader<'a> {
+    ByteReader { rest_bytes: chunk, byte_buf: byte_buf }
+  }
 
-    let mut byte_reader = ByteReader {
-        rest_bytes: chunk,
-        byte_buf: byte_buf.clone(),
-      };
+  pub fn close_to_buf(self) -> ByteBuf {
+    let rest_bytes = self.rest_bytes;
+    let mut byte_buf = self.byte_buf;
+    byte_buf.push_bytes(rest_bytes);
+    byte_buf
+  }
 
-    let opt_x = body(&mut byte_reader);
-
-    let ByteReader {
-        rest_bytes,
-        byte_buf: new_byte_buf 
-      } = byte_reader;
-
-    *byte_buf = new_byte_buf;
-
-    match opt_x {
-      Some(x) => {
-        assert!(byte_buf.is_empty());
-        Some((x, rest_bytes))
-      },
-      None => {
-        byte_buf.push_bytes(rest_bytes);
-        None
-      },
-    }
+  pub fn close(self) -> (ByteBuf, &'self [u8]) {
+    let ByteReader { rest_bytes, byte_buf } = self;
+    (byte_buf, rest_bytes)
   }
 
   pub fn has_bytes(&self, n: uint) -> bool {
@@ -59,15 +41,16 @@ impl<'self> ByteReader<'self> {
     !(self.byte_buf.is_empty() && self.rest_bytes.is_empty())
   }
 
-  pub fn consume_chunk<'a, T>(
+  pub fn consume_chunk<'a, A, T>(
     &mut self,
-    body: &fn(&'a [u8]) -> (T, Option<&'a [u8]>)
+    arg: A,
+    body: &once fn(A, &'a [u8]) -> (T, Option<&'a [u8]>)
   ) -> T 
   {
     if !self.byte_buf.is_empty() {
-      self.byte_buf.consume_buf(body)
+      self.byte_buf.consume_buf(arg, body)
     } else {
-      let (x, opt_rest) = body(self.rest_bytes);
+      let (x, opt_rest) = body(arg, self.rest_bytes);
       self.rest_bytes = match opt_rest {
         Some(rest) => rest,
         None => self.rest_bytes.slice(0, 0),
@@ -76,7 +59,7 @@ impl<'self> ByteReader<'self> {
     }
   }
 
-  pub fn read_be_u32(&mut self) -> u32 {
+  pub fn read_u32_be(&mut self) -> u32 {
     assert!(self.has_bytes(4));
     let a = self.read_byte() as u32;
     let b = self.read_byte() as u32;
@@ -86,7 +69,7 @@ impl<'self> ByteReader<'self> {
     (a << 24) | (b << 16) | (c << 8) | d
   }
 
-  pub fn read_be_u16(&mut self) -> u16 {
+  pub fn read_u16_be(&mut self) -> u16 {
     assert!(self.has_bytes(2));
     let a = self.read_byte() as u16;
     let b = self.read_byte() as u16;
@@ -94,7 +77,7 @@ impl<'self> ByteReader<'self> {
     (a << 8) | b
   }
 
-  pub fn read_le_u32(&mut self) -> u32 {
+  pub fn read_u32_le(&mut self) -> u32 {
     assert!(self.has_bytes(4));
     let a = self.read_byte() as u32;
     let b = self.read_byte() as u32;
@@ -104,7 +87,7 @@ impl<'self> ByteReader<'self> {
     (d << 24) | (c << 16) | (b << 8) | a
   }
 
-  pub fn read_le_u16(&mut self) -> u16 {
+  pub fn read_u16_le(&mut self) -> u16 {
     assert!(self.has_bytes(2));
     let a = self.read_byte() as u16;
     let b = self.read_byte() as u16;
@@ -119,48 +102,25 @@ mod test {
   use ByteBuf;
 
   #[test]
-  fn test_with_buf() {
-    { // make sure the body is called exactly once
-      let mut n = 0;
-      do ByteReader::with_buf(&mut ByteBuf::new(), &[]) |_| {
-        n = n + 1;
-        Some(())
-      };
-      assert_eq!(n, 1);
-    }
-
-    { // the return value
-      assert_eq!(
-        do ByteReader::with_buf(&mut ByteBuf::new(), &[1, 2]) |_| { Some(()) },
-        Some(((), &[1, 2]))
-      );
-    }
-  }
-
-  #[test]
   fn test_with_buf_carry() {
     let mut byte_buf = ByteBuf::new();
-    let none: Option<bool> = None;
 
-    do ByteReader::with_buf(&mut byte_buf, &[10, 20, 30])
-      |reader|
     {
+      let mut reader = ByteReader::new(byte_buf, &[10, 20, 30]);
       reader.read_byte();
       assert!(reader.has_bytes(2) && !reader.has_bytes(3));
-      none
+      byte_buf = reader.close_to_buf();
     };
 
-    do ByteReader::with_buf(&mut byte_buf, &[40, 50])
-      |reader|
     {
+      let reader = ByteReader::new(byte_buf, &[40, 50]);
       assert!(reader.has_some_bytes());
       assert!(reader.has_bytes(4) && !reader.has_bytes(5));
-      none
+      byte_buf = reader.close_to_buf();
     };
 
-    let res = do ByteReader::with_buf(&mut byte_buf, &[60, 70, 80])
-      |reader|
     {
+      let mut reader = ByteReader::new(byte_buf, &[60, 70, 80]);
       assert!(reader.has_some_bytes());
       assert!(reader.has_bytes(7));
       assert_eq!(reader.read_byte(), 20);
@@ -168,95 +128,81 @@ mod test {
       assert_eq!(reader.read_byte(), 40);
       assert_eq!(reader.read_byte(), 50);
       assert_eq!(reader.read_byte(), 60);
-      Some(true)
-    };
-
-    assert_eq!(res, Some((true, &[70, 80])));
-
-    do ByteReader::with_buf(&mut byte_buf, &[1, 2, 3])
-      |reader|
-    {
-      assert!(reader.has_bytes(3));
-      assert!(!reader.has_bytes(4));
-      assert_eq!(reader.read_byte(), 1);
-      assert_eq!(reader.read_byte(), 2);
-      assert_eq!(reader.read_byte(), 3);
-      none
+      let (_new_buf, rest) = reader.close();
+      assert_eq!(rest, &[70, 80]);
     };
   }
 
   #[test]
   fn test_read_byte() {
-    let none: Option<()> = None;
-
-    do ByteReader::with_buf(&mut ByteBuf::new(), &[10, 20, 30, 40, 50])
-      |reader|
-    {
-      assert!(reader.has_bytes(2));
-      assert_eq!(reader.read_byte(), 10);
-      assert_eq!(reader.read_byte(), 20);
-      assert!(reader.has_bytes(3));
-      assert!(reader.has_some_bytes());
-      assert!(!reader.has_bytes(5));
-      assert_eq!(reader.read_byte(), 30);
-      assert_eq!(reader.read_byte(), 40);
-      assert_eq!(reader.read_byte(), 50);
-      assert!(!reader.has_bytes(1));
-      assert!(reader.has_bytes(0));
-
-      none
-    };
+    let mut reader = ByteReader::new(ByteBuf::new(), &[10, 20, 30, 40, 50]);
+    assert!(reader.has_bytes(2));
+    assert_eq!(reader.read_byte(), 10);
+    assert_eq!(reader.read_byte(), 20);
+    assert!(reader.has_bytes(3));
+    assert!(reader.has_some_bytes());
+    assert!(!reader.has_bytes(5));
+    assert_eq!(reader.read_byte(), 30);
+    assert_eq!(reader.read_byte(), 40);
+    assert_eq!(reader.read_byte(), 50);
+    assert!(!reader.has_bytes(1));
+    assert!(reader.has_bytes(0));
   }
 
   #[test]
   fn test_consume_chunk() {
     { // consume without remainder
       let mut buf = ByteBuf::new();
-      let none: Option<()> = None;
 
-      do ByteReader::with_buf(&mut buf, &[11, 22, 33, 44]) |reader| {
+      {
+        let mut reader = ByteReader::new(buf, &[11, 22, 33, 44]);
         assert_eq!(reader.read_byte(), 11);
-        none
+        buf = reader.close_to_buf();
       };
 
-      do ByteReader::with_buf(&mut buf, &[55, 66]) |reader| {
+      {
+        let mut reader = ByteReader::new(buf, &[55, 66]);
         assert_eq!(reader.read_byte(), 22);
         assert_eq!(reader.read_byte(), 33);
-        none
+        buf = reader.close_to_buf();
       };
 
-      do ByteReader::with_buf(&mut buf, &[77, 88, 99]) |reader| {
+      {
+        let mut reader = ByteReader::new(buf, &[77, 88, 99]);
         let mut bytes = ~[];
         while reader.has_some_bytes() {
-          do reader.consume_chunk |chunk| {
+          do reader.consume_chunk('a') |arg, chunk| {
+            assert_eq!(arg, 'a');
             bytes.push_all(chunk);
             ((), None)
           };
         }
         assert_eq!(bytes, ~[44, 55, 66, 77, 88, 99]);
-        none
       };
     }
 
     { // consume with remainders
       let mut buf = ByteBuf::new();
-      let none: Option<()> = None;
 
-      do ByteReader::with_buf(&mut buf, &[11, 22, 33, 44]) |_reader| {
-        none
+      {
+        let reader = ByteReader::new(buf, &[11, 22, 33, 44]);
+        buf = reader.close_to_buf();
       };
 
-      do ByteReader::with_buf(&mut buf, &[55, 66, 77]) |_reader| {
-        none
+      {
+        let reader = ByteReader::new(buf, &[55, 66, 77]);
+        buf = reader.close_to_buf();
       };
 
-      let res = do ByteReader::with_buf(&mut buf, &[88, 99, 111]) |reader| {
+      {
+        let mut reader = ByteReader::new(buf, &[88, 99, 111]);
         let mut jar: ~[~[u8]] = ~[];
         let mut cookie = ~[];
 
         while reader.has_some_bytes() {
           // consume 4-byte cookies
-          let all_cookies = do reader.consume_chunk |chunk| {
+          let all_cookies = do reader.consume_chunk(42) |arg, chunk| {
+            assert_eq!(arg, 42);
             let mut rest = chunk;
 
             while cookie.len() < 4 && !rest.is_empty() {
@@ -282,48 +228,37 @@ mod test {
           }
         }
         assert_eq!(jar, ~[~[11, 22, 33, 44], ~[55, 66, 77, 88]]);
-        Some('a')
       };
-
-      assert_eq!(res, Some(('a', &[99, 111])));
     }
   }
 
   #[test]
   fn test_read_big_endian() {
-    let none: Option<()> = None;
-    do ByteReader::with_buf(&mut ByteBuf::new(), &[
+    let mut reader = ByteReader::new(ByteBuf::new(), &[
         0xab, 0xcd,
         0xde, 0xad, 0xbe, 0xef,
         0x12, 0x34, 0x56, 0x78,
         0xd2, 0x3c,
-      ]) |reader|
-    {
-      assert_eq!(reader.read_be_u16(), 0xabcd);
-      assert_eq!(reader.read_be_u32(), 0xdeadbeef);
-      assert_eq!(reader.read_be_u32(), 0x12345678);
-      assert_eq!(reader.read_be_u16(), 0xd23c);
-      none
-    };
+      ]);
+    assert_eq!(reader.read_u16_be(), 0xabcd);
+    assert_eq!(reader.read_u32_be(), 0xdeadbeef);
+    assert_eq!(reader.read_u32_be(), 0x12345678);
+    assert_eq!(reader.read_u16_be(), 0xd23c);
   }
 
   #[test]
   fn test_read_little_endian() {
-    let none: Option<()> = None;
-
-    do ByteReader::with_buf(&mut ByteBuf::new(), &[
+    let mut reader = ByteReader::new(ByteBuf::new(), &[
         0xcd, 0xab,
         0xef, 0xbe, 0xad, 0xde,
         0x78, 0x56, 0x34, 0x12,
         0x3c, 0xd2,
-      ]) |reader| 
-    {
-      assert_eq!(reader.read_le_u16(), 0xabcd);
-      assert_eq!(reader.read_le_u32(), 0xdeadbeef);
-      assert_eq!(reader.read_le_u32(), 0x12345678);
-      assert_eq!(reader.read_le_u16(), 0xd23c);
-      none
-    };
+      ]);
+    
+    assert_eq!(reader.read_u16_le(), 0xabcd);
+    assert_eq!(reader.read_u32_le(), 0xdeadbeef);
+    assert_eq!(reader.read_u32_le(), 0x12345678);
+    assert_eq!(reader.read_u16_le(), 0xd23c);
   }
 }
 

@@ -106,7 +106,7 @@ impl<C: Coder> ComprState<C> {
           }
         },
         EndPhase => {
-          // TODO: how to dry ` out.flush(recv)` ?
+          // TODO: how to dry the flush?
           return (Right(Ok(())), out.flush(recv))
         },
         ErrorPhase(err) => {
