@@ -293,7 +293,6 @@ mod test {
 
   #[bench]
   fn bench_read_huff_code(b: &mut test::BenchHarness) {
-    let right: Either<(),()> = Right(());
     let tree = huff::Tree::new_from_lens(
       &[3, 6, 6, 4, 5, 4, 7, 7, 7, 6, 5, 6, 4, 
         5, 4, 6, 7, 6, 6, 6, 7, 5, 5, 6, 5, 6, 
@@ -304,7 +303,7 @@ mod test {
     do b.iter {
       let mut reader = bits::BitReader::new(bits::BitBuf::new(), bytes);
       for 1000.times {
-        dynamic::read_huff_code(reader, &tree);
+        dynamic::read_huff_code(&mut reader, &tree);
       }
     };
   }

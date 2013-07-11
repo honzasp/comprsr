@@ -41,11 +41,13 @@ impl<C: Coder> ComprState<C> {
   pub fn input<R: bits::recv::Recv<u8>> (
     self,
     bit_reader: &mut bits::BitReader,
-    out: &mut out::Output<R>
+    out: &mut out::Output,
+    recv: R
   ) 
-    -> Either<ComprState<C>, Result<(), ~error::Error>>
+    -> (Either<ComprState<C>, Result<(), ~error::Error>>, R)
   {
     let mut st = self;
+    let mut recv = recv;
 
     loop {
       let res = match st.phase {
@@ -54,7 +56,7 @@ impl<C: Coder> ComprState<C> {
             Some(code) => match decode_litlen(code) {
                 Ok(litlen) => match litlen {
                   LiteralCode(byte) => {
-                    out.send_literal(byte);
+                    recv = out.send_literal(byte, recv);
                     Some(LitlenPhase)
                   },
                   LengthCode(len, 0) =>
@@ -93,7 +95,9 @@ impl<C: Coder> ComprState<C> {
           if bit_reader.has_bits(dist_extra_bits) {
             let dist_extra = bit_reader.read_bits16(dist_extra_bits);
             let dist = dist_base + dist_extra as uint;
-            match out.back_reference(dist, len) {
+            let (res, new_recv) = out.back_reference(dist, len, recv);
+            recv = new_recv;
+            match res {
               Ok(()) => Some(LitlenPhase),
               Err(err) => Some(ErrorPhase(err)),
             }
@@ -102,15 +106,16 @@ impl<C: Coder> ComprState<C> {
           }
         },
         EndPhase => {
-          return Right(Ok(()))
+          // TODO: how to dry ` out.flush(recv)` ?
+          return (Right(Ok(())), out.flush(recv))
         },
         ErrorPhase(err) => {
-          return Right(Err(err))
+          return (Right(Err(err)), out.flush(recv))
         },
       };
 
       match res {
-        None => return Left(st),
+        None => return (Left(st), out.flush(recv)),
         Some(next_phase) => st.phase = next_phase,
       }
     }

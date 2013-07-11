@@ -27,11 +27,13 @@ impl VerbState {
   pub fn input <R: bits::recv::Recv<u8>> (
     self,
     bit_reader: &mut bits::BitReader,
-    out: &mut out::Output<R>
+    out: &mut out::Output,
+    recv: R
   )
-    -> Either<VerbState, Result<(), ~error::Error>>
+    -> (Either<VerbState, Result<(), ~error::Error>>, R)
   {
     let mut st = self;
+    let mut recv = recv;
 
     loop {
       let res = match st.phase {
@@ -61,7 +63,7 @@ impl VerbState {
         },
         DataPhase => {
           let chunk = bit_reader.read_byte_chunk(st.remaining);
-          out.send_literal_chunk(chunk);
+          recv = out.send_literal_chunk(chunk, recv);
 
           if chunk.len() < st.remaining {
             st.remaining = st.remaining - chunk.len();
@@ -71,15 +73,15 @@ impl VerbState {
           }
         },
         EndPhase => {
-          return Right(Ok(()))
+          return (Right(Ok(())), recv)
         },
         ErrorPhase(err) => {
-          return Right(Err(err))
+          return (Right(Err(err)), recv)
         }
       };
 
       match res {
-        None => return Left(st), 
+        None => return (Left(st), recv), 
         Some(next_phase) => st.phase = next_phase,
       }
     }
@@ -192,20 +194,21 @@ mod test {
     }
 
     do b.iter {
-      let mut inflater = inflater::Inflater::new(());
+      let mut inflater = inflater::Inflater::new();
       let mut input_pos = 0;
+      let mut finished = false;
 
       while input_pos < bytes.len() {
         let next_pos = cmp::min(bytes.len(), input_pos + 1024);
-        match inflater.input(bytes.slice(input_pos, next_pos)) {
-          Left(new_infl) => inflater = new_infl,
-          Right((Ok(()), [])) => { },
+        match inflater.input(bytes.slice(input_pos, next_pos), ()) {
+          (Left(new_infl), ()) => inflater = new_infl,
+          (Right((Ok(()), [])), ()) => { finished = true; break },
           other => fail!(fmt!("Unexpected result %?", other)),
         };
         input_pos = next_pos;
       }
 
-      assert!(inflater.has_finished());
+      assert!(finished);
     };
   }
 
