@@ -14,8 +14,8 @@ pub use inflate = _inflate::inflate;
 pub use checksums = _checksums::checksums;
 
 pub mod gzip {
-  pub mod decoder;
-  pub mod member_recv;
+  pub mod hdr_decoder;
+  pub mod body_decoder;
   pub mod header;
   pub mod error;
 

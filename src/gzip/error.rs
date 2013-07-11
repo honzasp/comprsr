@@ -9,14 +9,6 @@ pub enum Error {
   BadDataChecksum(u32, u32),
   BadDataSize(uint, uint),
   ReservedFlagUsed(uint),
-  UnterminatedHeader(uint, uint),
-  UnterminatedExtra(uint, uint),
-  UnterminatedFileName(uint),
-  UnterminatedComment(uint),
-  UnterminatedHeaderChecksum(uint, uint),
-  UnterminatedData(uint),
-  UnterminatedDataChecksum(uint, uint),
-  UnterminatedDataSize(uint, uint),
 }
 
 impl ToStr for Error {
@@ -40,26 +32,6 @@ impl ToStr for Error {
           actual, from_file),
       ReservedFlagUsed(flag) =>
         fmt!("Reserved flag %u is set on", flag),
-      UnterminatedHeader(expected, got) =>
-        fmt!("Unterminated header, expected %u bytes, got %u", expected, got),
-      UnterminatedExtra(expected, got) =>
-        fmt!("Unterminated extra field, expected %u bytes, got %u",
-          expected, got),
-      UnterminatedFileName(got) =>
-        fmt!("Unterminated file name, %u bytes yet", got),
-      UnterminatedComment(got) =>
-        fmt!("Unterminated comment, %u bytes yet", got),
-      UnterminatedHeaderChecksum(expected, got) =>
-        fmt!("Unterminated header checksum, expected %u bytes, got %u",
-          expected, got),
-      UnterminatedData(compressed_bytes) =>
-        fmt!("Unterminated data, %u compressed bytes yet", compressed_bytes),
-      UnterminatedDataChecksum(expected, got) =>
-        fmt!("Unterminated data checksum, expected %u bytes, got %u",
-          expected, got),
-      UnterminatedDataSize(expected, got) =>
-        fmt!("Unterminated data size, expected %u bytes, got %u",
-          expected, got),
     }
   }
 }
