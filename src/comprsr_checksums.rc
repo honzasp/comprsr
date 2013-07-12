@@ -8,4 +8,5 @@ extern mod bits (name = "comprsr_bits",
 
 pub mod checksums {
   pub mod adler32;
+  pub mod crc32;
 }

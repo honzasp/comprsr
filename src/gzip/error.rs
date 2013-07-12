@@ -11,6 +11,7 @@ pub enum Error {
   ReservedFlagUsed(uint),
 }
 
+// TODO: change all the expected/got to computed/read
 impl ToStr for Error {
   pub fn to_str(&self) -> ~str {
     match *self {

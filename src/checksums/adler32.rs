@@ -1,6 +1,6 @@
 use bits::recv;
 
-struct Adler32 {
+pub struct Adler32 {
   priv s1: u32,
   priv s2: u32,
   priv i: uint,

@@ -10,7 +10,7 @@ impl HeaderDecoder {
     fail!()
   }
 
-  pub fn input<'a>(self, chunk: &'a [u8]) 
+  pub fn input<'a>(self, _chunk: &'a [u8]) 
     -> Either<HeaderDecoder, (Result<~header::Header, ~error::Error>, &'a [u8])>
   {
     fail!()
