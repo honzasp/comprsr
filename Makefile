@@ -9,7 +9,7 @@ ALL_DUMMIES  = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]
 ALL_TESTS    = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]*\)\.rc/test_\1/')
 ALL_BENCHS   = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]*\)\.rc/bench_\1/')
 
-.PHONY: all all_tests unit_tests benchmarks func_tests clean
+.PHONY: all all_tests unit_tests benchmarks func_tests clean loc
 
 all: $(ALL_DUMMIES)
 
@@ -35,6 +35,9 @@ testcomprsr_%~: src/comprsr_%.rc src/%/*.rs
 
 clean:
 	rm -f testcomprsr_*~ libcomprsr_*.dummy libcomprsr_*.so
+
+loc:
+	find -name '*.rc' -o -name '*.rs' -o -name '*.rb' | xargs wc -l
 
 libcomprsr_zlib.dummy testcomprsr_zlib~: libcomprsr_inflate.dummy libcomprsr_checksums.dummy libcomprsr_bits.dummy
 
