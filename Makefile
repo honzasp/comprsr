@@ -25,7 +25,7 @@ libcomprsr_%.dummy: src/comprsr_%.rc src/%/*.rs
 	touch $@
 
 test_%: testcomprsr_%~
-	./$<
+	RUST_THREADS=1 ./$<
 
 bench_%: testcomprsr_%~
 	./$< --bench

@@ -7,7 +7,7 @@ pub struct Header {
   comment: Option<~str>,
   extra_flags: u8,
   system: Option<System>,
-  mtime: Option<u32>,
+  mtime: Option<u32>, // TODO: use some date type
 }
 
 #[deriving(Eq, Clone)]

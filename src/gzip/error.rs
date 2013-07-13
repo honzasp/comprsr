@@ -9,6 +9,8 @@ pub enum Error {
   BadDataChecksum(u32, u32),
   BadDataSize(uint, uint),
   ReservedFlagUsed(uint),
+  TrailingExtraBytes(uint),
+  ExtraTooLong(uint, uint),
 }
 
 // TODO: change all the expected/got to computed/read
@@ -33,6 +35,11 @@ impl ToStr for Error {
           actual, from_file),
       ReservedFlagUsed(flag) =>
         fmt!("Reserved flag %u is set on", flag),
+      TrailingExtraBytes(count) =>
+        fmt!("Trailing %u bytes of extra field", count),
+      ExtraTooLong(remained, requested) =>
+        fmt!("An extra subfield too long, only %u bytes remained but %u requested",
+          remained, requested),
     }
   }
 }

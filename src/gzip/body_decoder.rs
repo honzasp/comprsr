@@ -33,7 +33,6 @@ impl BodyDecoder {
     let m_byte_buf = byte_buf;
 
     let mut recv = recv;
-    println(fmt!("out %?", chunk));
     let mut byte_reader = bits::ByteReader::new(m_byte_buf, chunk);
 
     loop {
@@ -44,7 +43,6 @@ impl BodyDecoder {
               do byte_reader.consume_chunk((inflater, crc, isize, recv))
               |(inflater, crc, isize, recv), chunk|
             {
-              println(fmt!("in %?", chunk));
               let (res, (n_recv, n_crc, n_isize)) =
                 inflater.input(chunk, (recv, crc, isize));
 
