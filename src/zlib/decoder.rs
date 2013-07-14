@@ -131,6 +131,7 @@ impl Decoder {
 
 #[cfg(test)]
 mod test {
+  use std::uint;
   use zlib::decoder;
   use zlib::error;
   use inflate;
@@ -150,6 +151,34 @@ mod test {
     match decoder.input(bytes, ()) {
       (Right((Err(err), rest)), ()) => (err, rest),
       x => fail!(fmt!("decode_err: unexpected %?", x)),
+    }
+  }
+
+  fn decode_chunked_ok(chunk_len: uint, bytes: &[u8]) -> ~[u8] {
+    let mut decoder = decoder::Decoder::new();
+    let mut out: ~[u8] = ~[];
+    let mut finished = false;
+
+    let mut iter = bytes.chunk_iter(chunk_len);
+    loop {
+      match iter.next() {
+        Some(chunk) => {
+          let (result, new_out) = decoder.input(chunk, out);
+          out = new_out;
+          match result {
+            Left(new_decoder) => { decoder = new_decoder },
+            Right((Ok(()), [])) => { finished = true; break },
+            x => fail!(fmt!("decode_chunked_ok: unexpected %?", x)),
+          }
+        },
+        None => break
+      }
+    };
+
+    if finished {
+      out
+    } else {
+      fail!("decode_chunked_ok: decoder did not finish")
     }
   }
 
@@ -234,6 +263,42 @@ mod test {
     );
   }
 
-  // TODO: test also decoding with multiple chunks
+  #[test]
+  fn test_decode_chunked() {
+    for uint::range(1, 10) |chunk_len| {
+      assert_eq!(decode_chunked_ok(chunk_len, &[
+          0b01111000, 0b10011100, 0b11101011, 0b10101001, 0b01101001,
+          0b10011000, 0b00110001, 0b10100001, 0b10100111, 0b10100111,
+          0b01100110, 0b01001010, 0b01000011, 0b01001101, 0b01001011,
+          0b11000111, 0b10000100, 0b10011110, 0b00111001, 0b00101101,
+          0b00001101, 0b00111101, 0b01110011, 0b00000000, 0b01110000,
+          0b00101100, 0b00001010, 0b11000101
+        ]),
+        ~[140, 124, 128, 152, 144, 140, 140, 124,
+          148, 128, 124, 132, 136, 144, 140, 156,
+          132, 128, 140, 156]
+      );
+    }
+
+    for uint::range(1, 10) |chunk_len| {
+      assert_eq!(decode_chunked_ok(chunk_len, &[
+          0x78, 0x9c, 0x25, 0x8c, 0xc1, 0x09, 0x00, 0x40, 0x0c, 0xc2,
+          0x66, 0x15, 0x1f, 0x2e, 0x90, 0xfd, 0xb9, 0x94, 0xb3, 0x0f,
+          0xc1, 0x46, 0xbb, 0x6e, 0x19, 0x04, 0x2d, 0x25, 0x99, 0x6a,
+          0x83, 0x0f, 0xe8, 0x45, 0x8c, 0x6a, 0x05, 0x21, 0x35, 0x44,
+          0x85, 0x92, 0x2e, 0x87, 0x5c, 0xf4, 0xaf, 0xd7, 0xd2, 0x32,
+          0x0b, 0xce, 0xc8, 0xef, 0x01, 0xfe, 0xbb, 0x28, 0x78
+        ]),
+        ~[99, 103, 99, 103, 103, 97, 103, 116, 116, 97, 116, 103, 97,
+          103, 97, 99, 116, 97, 97, 103, 103, 103, 103, 99, 99, 97,
+          116, 99, 103, 103, 116, 116, 99, 97, 99, 116, 97, 116, 103,
+          116, 99, 99, 116, 97, 99, 116, 116, 116, 103, 97, 97, 97, 97,
+          103, 116, 97, 103, 97, 103, 103, 99, 97, 97, 99, 103, 97, 116,
+          99, 97, 99, 97, 97, 103, 116, 103, 116, 103, 116, 103, 116, 99,
+          99, 103, 103, 116, 103, 116, 99, 97, 103, 99, 116, 97, 103, 99,
+          99, 103, 97, 97, 103]
+      );
+    }
+  }
 
 }
