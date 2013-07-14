@@ -1,3 +1,5 @@
+use checksums::crc32;
+
 #[deriving(Eq, Clone)]
 pub struct Header {
   is_text: bool,
@@ -46,6 +48,63 @@ impl Header {
       system: None,
       mtime: None
     }
+  }
+
+  pub fn crc32(&self) -> crc32::Crc32 {
+    let mut crc = crc32::Crc32::new();
+    let flg = 
+        if self.is_text             { 0b1 } else {0}
+      | if self.has_crc             { 0b10 } else {0}
+      | if self.extras.is_some()    { 0b100 } else {0}
+      | if self.file_name.is_some() { 0b1000 } else {0}
+      | if self.comment.is_some()   { 0b1_0000 } else {0} ;
+
+    crc = crc.update(&[0x1f, 0x8b, 8, flg]);
+    crc = crc.update(match self.mtime {
+      Some(mtime) => &[
+          (mtime      ) as u8,
+          (mtime >> 8 ) as u8,
+          (mtime >> 16) as u8,
+          (mtime >> 24) as u8,
+        ],
+      None => &[0, 0, 0, 0],
+    });
+    crc = crc.update(&[self.extra_flags, System::to_number(self.system)]);
+
+    match self.extras {
+      None => { },
+      Some(ref extras) => {
+        let xlen = do extras.iter().fold(0) 
+          |xlen, extra| { xlen + 4 + extra.data.len() };
+        crc = crc.update(&[xlen as u8, (xlen >> 8) as u8]);
+
+        for extras.iter().advance |extra| {
+          let (id1, id2) = extra.id;
+          let len = extra.data.len();
+          crc = crc.update(&[id1, id2]);
+          crc = crc.update(&[len as u8, (len >> 8) as u8]);
+          crc = crc.update(extra.data);
+        }
+      },
+    };
+
+    match self.file_name {
+      None => { },
+      Some(ref file_name) => {
+        crc = crc.update(file_name.as_bytes());
+        crc = crc.update(&[0]);
+      },
+    };
+
+    match self.comment {
+      None => { },
+      Some(ref comment) => {
+        crc = crc.update(comment.as_bytes());
+        crc = crc.update(&[0]);
+      },
+    };
+
+    crc
   }
 }
 

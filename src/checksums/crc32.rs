@@ -10,11 +10,9 @@ impl Crc32 {
   }
 
   pub fn update(self, chunk: &[u8]) -> Crc32 {
-    let mut c = self.crc ^ 0xffff_ffff;
-    for chunk.iter().advance |&byte| {
-      c = crc_table[c as u8 ^ byte] ^ (c >> 8);
-    }
-    Crc32 { crc: c ^ 0xffff_ffff }
+    let crc = do chunk.iter().fold(self.crc ^ 0xffff_ffff) 
+      |c, &byte| { crc_table[c as u8 ^ byte] ^ (c >> 8) } ^ 0xffff_ffff;
+    Crc32 { crc: crc }
   }
 
   pub fn crc32(&self) -> u32 {

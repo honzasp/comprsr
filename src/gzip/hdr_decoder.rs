@@ -12,17 +12,17 @@ pub struct HeaderDecoder {
 }
 
 enum Stage {
-  BeginStage,
-  ExtraStage,
+  BeginStage(),
+  ExtraStage(),
   ExtraHeaderStage(uint),
   ExtraDataStage((u8, u8), ~[u8], uint, uint),
-  FileNameStage,
+  FileNameStage(),
   FileNameDataStage(~[u8]),
-  CommentStage,
+  CommentStage(),
   CommentDataStage(~[u8]),
-  CrcStage,
+  CrcStage(),
   ErrorStage(~error::Error),
-  EndStage,
+  EndStage(),
 }
 
 impl HeaderDecoder {
@@ -215,9 +215,14 @@ impl HeaderDecoder {
         CrcStage => {
           if m_header.has_crc {
             if reader.has_bytes(2) {
-              reader.read_u16_le();
-              // TODO: somehow compute the expected CRC and compare with the read one
-              (true, EndStage)
+              let read_crc  = reader.read_u16_le();
+              let actual_crc = (m_header.crc32().crc32() & 0xff_ff) as u16;
+              if read_crc == actual_crc {
+                (true, EndStage)
+              } else {
+                let err = ~error::BadHeaderChecksum(actual_crc, read_crc);
+                (true, ErrorStage(err))
+              }
             } else {
               (false, CrcStage)
             }
@@ -412,7 +417,7 @@ mod test {
     );
   }
 
-  #[test] #[ignore]
+  #[test] 
   fn test_decode_header_crc() {
     { // CRC is ok
       assert_eq!(decode_hdr_ok(&[
@@ -422,7 +427,7 @@ mod test {
           9, 0,
           2, 3,  5, 0,   1, 2, 3, 5, 8,
           70, 105, 98, 111, 110, 97, 99, 99, 105, 0,
-          0x8e, 0x1a,
+          0x0e, 0x1a,
         ]),
         do header |h| {
           h.mtime = Some(0xdead_beef);
@@ -446,7 +451,7 @@ mod test {
           0xad, 0xde,
           2, 3, 4, 5,
         ]),
-        (~error::BadHeaderChecksum(0x1a8e, 0xdead), &[2, 3, 4, 5])
+        (~error::BadHeaderChecksum(0x1a0e, 0xdead), &[2, 3, 4, 5])
       );
     }
   }
