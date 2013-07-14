@@ -62,16 +62,16 @@ impl BodyDecoder {
             (false, DataStage(inflater, crc, isize))
           }
         },
-        Crc32Stage(crc32, isize) => {
+        Crc32Stage(computed_crc, isize) => {
           if byte_reader.has_bytes(4) {
-            let read_crc32 = byte_reader.read_u32_le();
-            if read_crc32 == crc32 {
+            let read_crc = byte_reader.read_u32_le();
+            if read_crc == computed_crc {
               (true, ISizeStage(isize))
             } else {
-              (true, ErrorStage(~error::BadDataChecksum(crc32, read_crc32)))
+              (true, ErrorStage(~error::BadDataChecksum(computed_crc, read_crc)))
             }
           } else {
-            (false, Crc32Stage(crc32, isize))
+            (false, Crc32Stage(computed_crc, isize))
           }
         },
         ISizeStage(isize) => {

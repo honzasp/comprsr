@@ -121,6 +121,18 @@ mod test {
 
       assert_eq!(a32.adler32(), 0x1bd6f6f3);
     };
+
+    { // even larger
+      let mut a32 = adler32::Adler32::new();
+      let p = [72, 101, 108, 108, 111, 33, 32];
+
+      for 1000.times {
+        a32 = a32.update(p);
+      }
+      a32 = a32.update(&[10]);
+
+      assert_eq!(a32.adler32(), 0x11019f8b);
+    }
   }
 
   #[test]

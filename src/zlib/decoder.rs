@@ -96,17 +96,17 @@ impl Decoder {
             (false, DataStage(inflater, a32))
           }
         },
-        Adler32Stage(expected_checksum) => {
+        Adler32Stage(computed_checksum) => {
           if byte_reader.has_bytes(4) {
             let read_checksum = byte_reader.read_u32_be();
-            if expected_checksum == read_checksum {
+            if computed_checksum == read_checksum {
               (true, EndStage)
             } else {
               (true, ErrorStage(~error::BadDataChecksum
-                (expected_checksum, read_checksum)))
+                (computed_checksum, read_checksum)))
             }
           } else {
-            (false, Adler32Stage(expected_checksum))
+            (false, Adler32Stage(computed_checksum))
           }
         },
         EndStage => {

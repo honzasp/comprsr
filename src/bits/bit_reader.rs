@@ -155,21 +155,19 @@ mod test {
     let mut bit_buf = BitBuf::new();
 
     {
-      let mut reader = BitReader::new(bit_buf, &[0b00000_000, 0b00001010]);
-      assert_eq!(reader.read_bits(3), 0b000);
-      reader.skip_to_byte();
-      assert!(!reader.has_bytes(2));
+      let mut reader = BitReader::new(bit_buf, 
+        &[0b11001_010, 0b111010_11, 0b01000110]);
+      assert_eq!(reader.read_bits8(3), 0b010);
+      assert_eq!(reader.read_bits8(7), 0b11_11001);
       bit_buf = reader.close_to_buf();
     };
 
     {
       let mut reader = BitReader::new(bit_buf,
-        &[0b00000000, 0b11110101, 0b11111111]);
-      assert!(reader.has_bytes(2));
-      assert_eq!(reader.read_u16(), 0b00000000_00001010);
-      assert!(reader.has_bytes(2));
-      assert_eq!(reader.read_u16(), 0b11111111_11110101);
-      assert!(!reader.has_bytes(1) && !reader.has_bits(1));
+        &[0b1001_0111, 0b0011_1011]);
+      assert_eq!(reader.read_bits8(6), 0b111010);
+      assert_eq!(reader.read_bits16(12), 0b0111_01000110);
+      assert_eq!(reader.read_bits8(8), 0b1011_1001);
     };
   }
 

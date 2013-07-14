@@ -13,7 +13,6 @@ pub enum Error {
   ExtraTooLong(uint, uint),
 }
 
-// TODO: change all the expected/got to computed/read
 impl ToStr for Error {
   pub fn to_str(&self) -> ~str {
     match *self {
@@ -24,14 +23,14 @@ impl ToStr for Error {
           expected as uint, got as uint),
       BadCompressionMethod(cm) =>
         fmt!("Bad compression method %u", cm),
-      BadHeaderChecksum(expected, got) =>
-        fmt!("Bad header checksum, expected %04x, got %04x",
-          expected as uint, got as uint),
-      BadDataChecksum(expected, got) =>
-        fmt!("Bad data checksum, expected %08x, got %08x",
-          expected as uint, got as uint),
+      BadHeaderChecksum(computed, read) =>
+        fmt!("Bad header checksum, computed %04x, but in file is %04x",
+          computed as uint, read as uint),
+      BadDataChecksum(computed, read) =>
+        fmt!("Bad data checksum, decompressed %08x, in trailer %08x",
+          computed as uint, read as uint),
       BadDataSize(actual, from_file) =>
-        fmt!("Bad data size, decompressed %u bytes, but should get %u bytes",
+        fmt!("Bad data size, decompressed %u bytes, in trailer %u bytes",
           actual, from_file),
       ReservedFlagUsed(flag) =>
         fmt!("Reserved flag %u is set on", flag),
