@@ -122,7 +122,7 @@ impl Inflater {
       if !continue { 
         return (Left(Inflater {
           stage: i_stage,
-          bit_buf: i_bit_buf,
+          bit_buf: bit_reader.close_to_buf(),
           output: i_output,
           last_block: i_last_block
         }), recv)
@@ -142,9 +142,57 @@ impl Inflater {
 #[cfg(test)]
 mod test {
   use inflate::test_helpers::*;
+  use std::uint;
 
   #[test]
   fn test_inflate_bad_block_type() {
     assert_eq!(inflate_err(&[0b110]), (~error::BadBlockType(0b11), &[]));
+  }
+
+  #[test]
+  fn test_inflate_chunked() {
+    for uint::range(1, 10) |chunk_len| {
+      // verbatim
+      assert_eq!(inflate_chunked_ok(chunk_len, &[
+          0b00000_000,
+          0b0000_0110, 0b0000_0000,
+          0b1111_1001, 0b1111_1111,
+          11, 22, 33, 44, 55, 66,
+          0b00000_001,
+          0b0000_0100, 0b0000_0000,
+          0b1111_1011, 0b1111_1111,
+          77, 88, 99, 110
+        ]), 
+        ~[11, 22, 33, 44, 55, 66, 77, 88, 99, 110]
+      );
+
+      // fixed
+      assert_eq!(inflate_chunked_ok(chunk_len, &[
+          0b11100011, 0b00010010, 0b01010011,
+          0b11000100, 0b00001101, 0b10111001,
+          0b11000100, 0b00010100, 0b00000001
+        ]),
+        ~[ 10, 22, 33, 22, 33, 22, 33, 22
+        , 33, 22, 33, 22, 33, 22, 33, 22
+        , 33, 22, 33, 22, 33, 22, 33, 22
+        , 33, 22, 33, 22, 33, 10, 22, 33]
+      );
+
+      // dynamic
+      assert_eq!(inflate_chunked_ok(chunk_len, &[
+         0b00001101, 0b11001000, 0b00110001, 0b00010001, 0b00000000,
+         0b00000000, 0b00001100, 0b00000010, 0b00110001, 0b01000100,
+         0b01110000, 0b10001100, 0b11101000, 0b01111100, 0b11110111,
+         0b10110100, 0b00011001, 0b01010011, 0b01001000, 0b00100111,
+         0b10001111, 0b01111001, 0b00000011, 0b00100101, 0b00111111,
+         0b00110110, 0b01010110, 0b11001010, 0b00000001 
+        ]),
+        ~[30, 120, 120, 22, 30, 255, 0, 20, 255,
+          120, 255, 20, 255, 255, 120, 120, 0, 22,
+          22, 120, 120, 22, 20, 20, 120, 20, 0, 22,
+          30, 120]
+      );
+    }
+
   }
 }

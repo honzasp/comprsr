@@ -260,6 +260,7 @@ mod test {
   use gzip::test_helpers::*;
   use gzip::header;
   use gzip::error;
+  use std::uint;
 
   fn header(f: &once fn(&mut header::Header)) -> ~header::Header {
     let mut header = ~header::Header::blank();
@@ -287,9 +288,6 @@ mod test {
           0x1f, 0x8b, 0x08, 0x00,
           0x21, 0x43, 0x65, 0x87,
           0xab, 0x01,
-          //0xe3, 0x12, 0x91, 0x03, 0x00a,
-          //0xf2, 0xb6, 0x77, 0x26,
-          //0x03, 0x00, 0x00, 0x00
         ]), do header |h| {
           h.extra_flags = 0xab;
           h.mtime = Some(0x87654321);
@@ -452,6 +450,53 @@ mod test {
           2, 3, 4, 5,
         ]),
         (~error::BadHeaderChecksum(0x1a0e, 0xdead), &[2, 3, 4, 5])
+      );
+    }
+  }
+
+  #[test]
+  fn test_decode_header_chunked() {
+    for uint::range(1, 10) |chunk_len| {
+      assert_eq!(decode_hdr_chunked_ok(chunk_len, &[
+          0x1f, 0x8b, 8, 0b000_00100,
+          0, 0, 0, 0, 0, 255, 
+          16, 0, 
+            11, 22, 3, 0, 110, 120, 130,
+            44, 2,  5, 0, 2, 3, 5, 7, 11,
+        ]), do header |h| {
+          h.extras = Some(~[
+              header::Extra {
+                id: (11, 22),
+                data: ~[110, 120, 130],
+              },
+              header::Extra {
+                id: (44, 2),
+                data: ~[2, 3, 5, 7, 11],
+              }
+            ]);
+        }
+      );
+
+      assert_eq!(decode_hdr_chunked_ok(chunk_len, &[
+          0x1f, 0x8b, 0x08, 0x00,
+          0x21, 0x43, 0x65, 0x87,
+          0xab, 0x01,
+        ]), do header |h| {
+          h.extra_flags = 0xab;
+          h.mtime = Some(0x87654321);
+          h.system = Some(header::Amiga);
+        }
+      );
+
+      assert_eq!(decode_hdr_chunked_ok(chunk_len, &[
+          0x1f, 0x8b, 8, 0b000_10000,
+          0, 0, 0, 0, 0, 255, 
+            67, 114, 101, 97, 116, 101, 100, 32, 98,
+            121, 32, 99, 111, 109, 112, 114, 115, 114, 0,
+        ]),
+        do header |h| {
+          h.comment = Some(~"Created by comprsr");
+        }
       );
     }
   }

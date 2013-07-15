@@ -34,3 +34,42 @@ pub fn decode_body_err<'a>(bytes: &'a [u8]) -> (~error::Error, &'a [u8]) {
     other => fail!(fmt!("decode_body_err: unexpected %?", other)),
   }
 }
+
+pub fn decode_hdr_chunked_ok(chunk_len: uint, bytes: &[u8]) -> ~header::Header {
+  let mut decoder = hdr_decoder::HeaderDecoder::new();
+
+  let mut iter = bytes.chunk_iter(chunk_len);
+  loop {
+    match iter.next() {
+      Some(chunk) => {
+        match decoder.input(chunk) {
+          Left(new_decoder) => { decoder = new_decoder },
+          Right((Ok(header), [])) => { return header },
+          x => fail!(fmt!("decode_hdr_chunked_ok: unexpected %?", x)),
+        }
+      },
+      None => fail!("decode_hdr_chunked_ok: decoder did not finish"),
+    }
+  };
+}
+
+pub fn decode_body_chunked_ok(chunk_len: uint, bytes: &[u8]) -> ~[u8] {
+  let mut decoder = body_decoder::BodyDecoder::new();
+  let mut out: ~[u8] = ~[];
+
+  let mut iter = bytes.chunk_iter(chunk_len);
+  loop {
+    match iter.next() {
+      Some(chunk) => {
+        let (result, new_out) = decoder.input(chunk, out);
+        out = new_out;
+        match result {
+          Left(new_decoder) => { decoder = new_decoder },
+          Right((Ok(()), [])) => { return out },
+          x => fail!(fmt!("decode_hdr_chunked_ok: unexpected %?", x)),
+        }
+      },
+      None => fail!("decode_hdr_chunked_ok: decoder did not finish"),
+    }
+  };
+}

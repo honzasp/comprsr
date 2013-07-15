@@ -112,6 +112,7 @@ impl BodyDecoder {
 mod test {
   use gzip::test_helpers::*;
   use gzip::error;
+  use std::uint;
 
   #[test]
   fn test_decode_body_ok() {
@@ -147,6 +148,19 @@ mod test {
         ]),
         (~error::BadDataSize(10, 77), &[2, 3, 4, 5])
       );
+    }
+  }
+
+  #[test]
+  fn test_decode_body_chunked() {
+    for uint::range(1, 10) |chunk_len| {
+      assert_eq!(decode_body_chunked_ok(chunk_len, &[
+          0x63, 0x64, 0x64, 0x62, 0x66, 0xe5,
+          0xe0, 0x15, 0x55, 0x32, 0x07, 0x00,
+          0xf0, 0x8a, 0xcb, 0xff,
+          0x0a, 0x00, 0x00, 0x00,
+        ]),
+        ~[1, 1, 2, 3, 5, 8, 13, 21, 34, 55]);
     }
   }
 }
