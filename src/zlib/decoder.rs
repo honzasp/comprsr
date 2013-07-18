@@ -29,102 +29,107 @@ impl Decoder {
     -> (Either<Decoder, (Result<(), ~error::Error>, &'a [u8])>, R)
   {
     let Decoder { stage, byte_buf } = self;
-    let i_byte_buf = byte_buf;
-    let mut i_stage = stage;
-
+    let mut stage = stage;
     let mut recv = recv;
-    let mut byte_reader = bits::ByteReader::new(i_byte_buf, chunk);
+    let mut reader = bits::ByteReader::new(byte_buf, chunk);
 
     loop {
-      let (continue, new_stage) = match i_stage {
-        HeaderStage => {
-          if byte_reader.has_bytes(2) {
-            let cmf = byte_reader.read_byte();
-            let flg = byte_reader.read_byte();
-
-            let cm = cmf & 0b1111;
-            let cinfo = (cmf >> 4) & 0b1111;
-
-            let _fcheck = flg & 0b11111;
-            let fdict = (flg >> 5) & 0b1;
-            let _flevel = (flg >> 6) & 0b11;
-
-            let win_size: uint = 1 << (8 + cinfo as uint);
-
-            if cm != 8 {
-              (true, ErrorStage(~error::BadCompressionMethod(cm as uint)))
-            } else if win_size > 32 * 1024 {
-              (true, ErrorStage(~error::WindowTooLong(win_size)))
-            } else if (cmf as uint * 256 + flg as uint) % 31 != 0 {
-              (true, ErrorStage(~error::BadHeaderChecksum(cmf, flg)))
-            } else if fdict != 0 {
-              (true, ErrorStage(~error::DictionaryUsed))
-            } else {
-              (true, DataStage(inflater::Inflater::new(), adler32::Adler32::new()))
-            }
-          } else {
-            (false, HeaderStage)
-          }
-        },
+      let (continue, new_stage) = match stage {
+        HeaderStage() => 
+          Decoder::header_stage(&mut reader),
         DataStage(inflater, a32) => {
-          let a32 = a32;
-          let inflater = inflater;
-
-          if byte_reader.has_some_bytes() {
-            // TODO: somehow get rid of the extra argument to `consume_chunk` 
-            // (Rust doesn't allow us to move from the captured variables in the closure, because
-            // the once-fn doesn't *have* to be called, so the value may or may not be moved, which
-            // is unsound.)
-            let (new_stage, new_recv) = do byte_reader.consume_chunk((inflater, a32, recv)) 
-              |(inflater, a32, recv), chunk| {
-
-              let (res, (new_recv, new_a32)) = inflater.input(chunk, (recv, a32));
-
-              match res {
-                Left(new_inflater) => 
-                  ((DataStage(new_inflater, new_a32), new_recv), None),
-                Right((Ok(()), rest)) =>
-                  ((Adler32Stage(new_a32.adler32()), new_recv), Some(rest)),
-                Right((Err(err), rest)) =>
-                  ((ErrorStage(~error::InflateError(err)), new_recv), Some(rest)),
-              }
-            };
-
-            recv = new_recv;
-            (true, new_stage)
-          } else {
-            (false, DataStage(inflater, a32))
-          }
+          let (new_recv, continue, stage) = Decoder::data_stage(
+            inflater, a32, &mut reader, recv);
+          recv = new_recv;
+          (continue, stage)
         },
-        Adler32Stage(computed_checksum) => {
-          if byte_reader.has_bytes(4) {
-            let read_checksum = byte_reader.read_u32_be();
-            if computed_checksum == read_checksum {
-              (true, EndStage)
-            } else {
-              (true, ErrorStage(~error::BadDataChecksum
-                (computed_checksum, read_checksum)))
-            }
-          } else {
-            (false, Adler32Stage(computed_checksum))
-          }
-        },
-        EndStage => {
-          let (_byte_buf, rest) = byte_reader.close();
-          return (Right((Ok(()), rest)), recv)
-        },
-        ErrorStage(err) => {
-          let (_byte_buf, rest) = byte_reader.close();
-          return (Right((Err(err), rest)), recv)
-        },
+        Adler32Stage(computed_checksum) => 
+          Decoder::adler32_stage(computed_checksum, &mut reader),
+        EndStage() => 
+          return (Right((Ok(()), reader.close_to_rest())), recv),
+        ErrorStage(err) => 
+          return (Right((Err(err), reader.close_to_rest())), recv),
       };
 
       if continue {
-        i_stage = new_stage;
+        stage = new_stage;
       } else {
-        let decoder = Decoder { stage: new_stage, byte_buf: byte_reader.close_to_buf() };
+        let decoder = Decoder { stage: new_stage, byte_buf: reader.close_to_buf() };
         return (Left(decoder), recv)
       }
+    }
+  }
+
+  fn header_stage(reader: &mut bits::ByteReader)
+    -> (bool, Stage)
+  {
+    if reader.has_bytes(2) {
+      let cmf = reader.read_byte();
+      let flg = reader.read_byte();
+
+      let cm = cmf & 0b1111;
+      let cinfo = (cmf >> 4) & 0b1111;
+
+      let _fcheck = flg & 0b11111;
+      let fdict = (flg >> 5) & 0b1;
+      let _flevel = (flg >> 6) & 0b11;
+
+      let win_size: uint = 1 << (8 + cinfo as uint);
+
+      if cm != 8 {
+        (true, ErrorStage(~error::BadCompressionMethod(cm as uint)))
+      } else if win_size > 32 * 1024 {
+        (true, ErrorStage(~error::WindowTooLong(win_size)))
+      } else if (cmf as uint * 256 + flg as uint) % 31 != 0 {
+        (true, ErrorStage(~error::BadHeaderChecksum(cmf, flg)))
+      } else if fdict != 0 {
+        (true, ErrorStage(~error::DictionaryUsed))
+      } else {
+        (true, DataStage(inflater::Inflater::new(), adler32::Adler32::new()))
+      }
+    } else {
+      (false, HeaderStage)
+    }
+  }
+
+  fn data_stage<R: bits::recv::Recv<u8>>(
+    inflater: inflater::Inflater, a32: adler32::Adler32,
+    reader: &mut bits::ByteReader, recv: R)
+    -> (R, bool, Stage)
+  {
+    if reader.has_some_bytes() {
+      do reader.consume_chunk((inflater, a32, recv)) 
+        |(inflater, a32, recv), chunk| {
+
+        let (res, (new_recv, new_a32)) = inflater.input(chunk, (recv, a32));
+
+        match res {
+          Left(new_inflater) => 
+            ((new_recv, true, DataStage(new_inflater, new_a32)), None),
+          Right((Ok(()), rest)) =>
+            ((new_recv, true, Adler32Stage(new_a32.adler32())), Some(rest)),
+          Right((Err(err), rest)) =>
+            ((new_recv, true, ErrorStage(~error::InflateError(err))), Some(rest)),
+        }
+      }
+    } else {
+      (recv, false, DataStage(inflater, a32))
+    }
+  }
+
+  fn adler32_stage(computed_checksum: u32, reader: &mut bits::ByteReader)
+    -> (bool, Stage)
+  {
+    if reader.has_bytes(4) {
+      let read_checksum = reader.read_u32_be();
+      if computed_checksum == read_checksum {
+        (true, EndStage)
+      } else {
+        (true, ErrorStage(~error::BadDataChecksum
+          (computed_checksum, read_checksum)))
+      }
+    } else {
+      (false, Adler32Stage(computed_checksum))
     }
   }
 }
@@ -273,7 +278,7 @@ mod test {
       );
     }
 
-    /*for uint::range(1, 10) |chunk_len| {
+    for uint::range(1, 10) |chunk_len| {
       assert_eq!(decode_chunked_ok(chunk_len, &[
           0x78, 0x9c, 0x25, 0x8c, 0xc1, 0x09, 0x00, 0x40, 0x0c, 0xc2,
           0x66, 0x15, 0x1f, 0x2e, 0x90, 0xfd, 0xb9, 0x94, 0xb3, 0x0f,
@@ -291,7 +296,7 @@ mod test {
           99, 103, 103, 116, 103, 116, 99, 97, 103, 99, 116, 97, 103, 99,
           99, 103, 97, 97, 103]
       );
-    }*/
+    }
   }
 
 }
