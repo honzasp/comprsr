@@ -18,6 +18,11 @@ impl<'self> ByteReader<'self> {
     byte_buf
   }
 
+  pub fn close_to_rest(self) -> &'self [u8] {
+    sanity!(self.byte_buf.is_empty());
+    self.rest_bytes
+  }
+
   pub fn close(self) -> (ByteBuf, &'self [u8]) {
     let ByteReader { rest_bytes, byte_buf } = self;
     (byte_buf, rest_bytes)

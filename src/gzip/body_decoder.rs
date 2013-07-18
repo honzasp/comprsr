@@ -14,7 +14,7 @@ enum Stage {
   Crc32Stage(u32, u32),
   ISizeStage(u32),
   ErrorStage(~error::Error),
-  EndStage,
+  EndStage(),
 }
 
 impl BodyDecoder {
@@ -29,72 +29,26 @@ impl BodyDecoder {
     -> (Either<BodyDecoder, (Result<(), ~error::Error>, &'a [u8])>, R)
   {
     let BodyDecoder { stage, byte_buf } = self;
-    let mut m_stage = stage;
-    let m_byte_buf = byte_buf;
-
+    let mut stage = stage;
     let mut recv = recv;
-    let mut byte_reader = bits::ByteReader::new(m_byte_buf, chunk);
+    let mut byte_reader = bits::ByteReader::new(byte_buf, chunk);
 
     loop {
-      let (continue, new_stage) = match m_stage {
+      let (continue, new_stage) = match stage {
         DataStage(inflater, crc, isize) => {
-          if byte_reader.has_some_bytes() {
-            let (new_recv, continue, new_stage) = 
-              do byte_reader.consume_chunk((inflater, crc, isize, recv))
-              |(inflater, crc, isize, recv), chunk|
-            {
-              let (res, (n_recv, n_crc, n_isize)) =
-                inflater.input(chunk, (recv, crc, isize));
-
-              match res {
-                Left(n_inflater) =>
-                  ((n_recv, false, DataStage(n_inflater, n_crc, n_isize)), None),
-                Right((Ok(()), rest)) =>
-                  ((n_recv, true, Crc32Stage(n_crc.crc32(), n_isize)), Some(rest)),
-                Right((Err(err), rest)) =>
-                  ((n_recv, true, ErrorStage(~error::InflateError(err))), Some(rest)),
-              }
-            };
-
-            recv = new_recv;
-            (continue, new_stage)
-          } else {
-            (false, DataStage(inflater, crc, isize))
-          }
+          let (new_recv, continue, new_stage) = BodyDecoder::data_stage(
+            inflater, crc, isize, recv, &mut byte_reader);
+          recv = new_recv;
+          (continue, new_stage)
         },
-        Crc32Stage(computed_crc, isize) => {
-          if byte_reader.has_bytes(4) {
-            let read_crc = byte_reader.read_u32_le();
-            if read_crc == computed_crc {
-              (true, ISizeStage(isize))
-            } else {
-              (true, ErrorStage(~error::BadDataChecksum(computed_crc, read_crc)))
-            }
-          } else {
-            (false, Crc32Stage(computed_crc, isize))
-          }
-        },
-        ISizeStage(isize) => {
-          if byte_reader.has_bytes(4) {
-            let read_isize = byte_reader.read_u32_le();
-            if read_isize == isize {
-              (true, EndStage)
-            } else {
-              (true, ErrorStage(~error::BadDataSize
-                (isize as uint, read_isize as uint)))
-            }
-          } else {
-            (false, ISizeStage(isize))
-          }
-        },
-        ErrorStage(err) => {
-          let (_byte_buf, rest) = byte_reader.close();
-          return (Right((Err(err), rest)), recv)
-        },
-        EndStage => {
-          let (_byte_buf, rest) = byte_reader.close();
-          return (Right((Ok(()), rest)), recv)
-        },
+        Crc32Stage(computed_crc, isize) =>
+          BodyDecoder::crc32_stage(computed_crc, isize, &mut byte_reader),
+        ISizeStage(isize) => 
+          BodyDecoder::isize_stage(isize, &mut byte_reader),
+        ErrorStage(err) => 
+          return (Right((Err(err), byte_reader.close_to_rest())), recv),
+        EndStage => 
+          return (Right((Ok(()), byte_reader.close_to_rest())), recv),
       };
 
       if !continue {
@@ -102,8 +56,65 @@ impl BodyDecoder {
         let decoder = BodyDecoder { stage: new_stage, byte_buf: byte_buf };
         return (Left(decoder), recv)
       } else {
-        m_stage = new_stage;
+        stage = new_stage;
       }
+    }
+  }
+
+  fn data_stage<R: recv::Recv<u8>>(
+    inflater: inflater::Inflater, crc: crc32::Crc32, isize: u32,
+    recv: R, byte_reader: &mut bits::ByteReader)
+    -> (R, bool, Stage)
+  {
+    if byte_reader.has_some_bytes() {
+      do byte_reader.consume_chunk((inflater, crc, isize, recv))
+        |(inflater, crc, isize, recv), chunk|
+      {
+        let (res, (n_recv, n_crc, n_isize)) =
+          inflater.input(chunk, (recv, crc, isize));
+
+        match res {
+          Left(n_inflater) =>
+            ((n_recv, false, DataStage(n_inflater, n_crc, n_isize)), None),
+          Right((Ok(()), rest)) =>
+            ((n_recv, true, Crc32Stage(n_crc.crc32(), n_isize)), Some(rest)),
+          Right((Err(err), rest)) =>
+            ((n_recv, true, ErrorStage(~error::InflateError(err))), Some(rest)),
+        }
+      }
+    } else {
+      (recv, false, DataStage(inflater, crc, isize))
+    }
+  }
+
+  fn crc32_stage(computed_crc: u32, isize: u32,
+    byte_reader: &mut bits::ByteReader) -> (bool, Stage) 
+  {
+    if byte_reader.has_bytes(4) {
+      let read_crc = byte_reader.read_u32_le();
+      if read_crc == computed_crc {
+        (true, ISizeStage(isize))
+      } else {
+        (true, ErrorStage(~error::BadDataChecksum(computed_crc, read_crc)))
+      }
+    } else {
+      (false, Crc32Stage(computed_crc, isize))
+    }
+  }
+
+  fn isize_stage(isize: u32, byte_reader: &mut bits::ByteReader) 
+    -> (bool, Stage) 
+  {
+    if byte_reader.has_bytes(4) {
+      let read_isize = byte_reader.read_u32_le();
+      if read_isize == isize {
+        (true, EndStage)
+      } else {
+        (true, ErrorStage(~error::BadDataSize
+          (isize as uint, read_isize as uint)))
+      }
+    } else {
+      (false, ISizeStage(isize))
     }
   }
 }
