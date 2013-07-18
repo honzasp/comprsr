@@ -12,7 +12,7 @@ pub struct Output {
 impl Output {
   pub fn new(window_size: uint) -> Output {
     Output {
-      window: vec::from_elem(window_size, 77),
+      window: vec::from_elem(window_size, 77u8),
       wrapped: false,
       pos: 0, cache_pos: 0,
     }

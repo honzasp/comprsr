@@ -18,7 +18,7 @@ impl<X, A: Recv<X>, B: Recv<X>, C: Recv<X>> Recv<X> for (A, B, C) {
   }
 }
 
-impl<X: Copy> Recv<X> for ~[X] {
+impl<X: Clone> Recv<X> for ~[X] {
   pub fn receive(self, xs: &[X]) -> ~[X] {
     vec::append(self, xs)
   }
