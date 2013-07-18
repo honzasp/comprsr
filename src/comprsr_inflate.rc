@@ -3,11 +3,11 @@
 #[link(author = "github.com/honzasp")];
 #[crate_type = "lib"];
 
-extern mod bits (name = "comprsr_bits",
-  vers = "0.0.1", author = "github.com/honzasp");
 
-#[cfg(test)]
-extern mod extra;
+#[cfg(test)] extern mod extra;
+
+extern mod comprsr_bits (vers = "0.0.1", author = "github.com/honzasp");
+pub use bits = comprsr_bits;
 
 pub mod inflate {
   pub use inflate::error::*;

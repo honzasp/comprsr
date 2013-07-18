@@ -10,10 +10,7 @@ pub use bits::bit_reader::{BitReader};
 pub use bits::bit_buf::{BitBuf};
 pub use bits::byte_reader::{ByteReader};
 pub use bits::byte_buf::{ByteBuf};
-
-pub mod recv {
-  pub use bits::recv::*;
-}
+pub use recv = bits::recv;
 
 pub mod bits {
   pub mod bit_reader;
