@@ -64,7 +64,7 @@ mod test {
     {
       let mut bytes = ~[];
       for 100.times {
-        bytes.push_all(&[231, 251, 14, 182, 171, 213, 36, 190, 255, 107]);
+        bytes.push_all(&[231u8, 251, 14, 182, 171, 213, 36, 190, 255, 107]);
       }
 
       assert_eq!(0xdf9884a7, adler32(bytes));
