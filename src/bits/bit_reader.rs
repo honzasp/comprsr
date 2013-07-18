@@ -1,6 +1,6 @@
-// TODO: change assert! to sanity! (and disable those checks in "production" code)
 use std::cmp;
 use BitBuf;
+mod sanity;
 
 pub struct BitReader<'self> {
   priv rest_bytes: &'self [u8],
@@ -19,7 +19,7 @@ impl<'self> BitReader<'self> {
     let rest_bytes = self.rest_bytes;
     let mut bit_buf = self.bit_buf;
 
-    assert!(rest_bytes.len() * 8 + bit_buf.bits <= 16);
+    sanity!(rest_bytes.len() * 8 + bit_buf.bits <= 16);
     for rest_bytes.iter().advance |&byte| {
       bit_buf.push_byte(byte);
     }
@@ -32,7 +32,7 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn has_bits(&self, bits: uint) -> bool {
-    assert!(bits <= 16);
+    sanity!(bits <= 16);
     if self.rest_bytes.len() >= 2 {
       true
     } else {
@@ -45,12 +45,12 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn skip_to_byte(&mut self) {
-    assert!(self.bit_buf.bits < 8);
+    sanity!(self.bit_buf.bits < 8);
     self.bit_buf.clear();
   }
 
   priv fn read_bits(&mut self, bits: uint) -> u32 {
-    assert!(bits <= 16);
+    sanity!(bits <= 16);
     while self.bit_buf.bits < bits {
       self.bit_buf.push_byte(*self.rest_bytes.head());
       self.rest_bytes = self.rest_bytes.tail();
@@ -60,18 +60,18 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn read_bits8(&mut self, bits: uint) -> u8 {
-    assert!(bits <= 8);
+    sanity!(bits <= 8);
     self.read_bits(bits) as u8
   }
 
   pub fn read_bits16(&mut self, bits: uint) -> u16 {
-    assert!(bits <= 16);
+    sanity!(bits <= 16);
     self.read_bits(bits) as u16
   }
 
   pub fn read_rev_bits8(&mut self, bits: uint) -> u8 {
     // TODO: this could surely be optimized
-    assert!(bits <= 8);
+    sanity!(bits <= 8);
     let mut res: u8 = 0;
     for bits.times {
       let bit = self.read_bits8(1);
@@ -81,12 +81,12 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn unread_bits8(&mut self, bits: uint, data: u8) {
-    assert!(bits <= 8);
+    sanity!(bits <= 8);
     self.bit_buf.unshift_bits(bits, data as u32);
   }
 
   pub fn unread_bits16(&mut self, bits: uint, data: u16) {
-    assert!(bits <= 16);
+    sanity!(bits <= 16);
     self.bit_buf.unshift_bits(bits, data as u32);
   }
 
@@ -95,7 +95,7 @@ impl<'self> BitReader<'self> {
   }
 
   pub fn read_byte_chunk(&mut self, limit: uint) -> &'self [u8] {
-    assert!(self.bit_buf.bits == 0);
+    sanity!(self.bit_buf.bits == 0);
     let len = cmp::min(limit, self.rest_bytes.len());
     let chunk = self.rest_bytes.slice(0, len);
     let rest = self.rest_bytes.slice(len, self.rest_bytes.len());

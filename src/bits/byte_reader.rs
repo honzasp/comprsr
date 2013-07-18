@@ -1,4 +1,5 @@
 use ByteBuf;
+mod sanity;
 
 pub struct ByteReader<'self> {
   priv rest_bytes: &'self [u8],
@@ -30,7 +31,7 @@ impl<'self> ByteReader<'self> {
     if !self.byte_buf.is_empty() {
       self.byte_buf.shift_byte()
     } else {
-      assert!(self.rest_bytes.len() >= 1);
+      sanity!(self.rest_bytes.len() >= 1);
       let res = self.rest_bytes[0];
       self.rest_bytes = self.rest_bytes.tail();
       res
@@ -60,7 +61,7 @@ impl<'self> ByteReader<'self> {
   }
 
   pub fn read_u32_be(&mut self) -> u32 {
-    assert!(self.has_bytes(4));
+    sanity!(self.has_bytes(4));
     let a = self.read_byte() as u32;
     let b = self.read_byte() as u32;
     let c = self.read_byte() as u32;
@@ -70,7 +71,7 @@ impl<'self> ByteReader<'self> {
   }
 
   pub fn read_u16_be(&mut self) -> u16 {
-    assert!(self.has_bytes(2));
+    sanity!(self.has_bytes(2));
     let a = self.read_byte() as u16;
     let b = self.read_byte() as u16;
 
@@ -78,7 +79,7 @@ impl<'self> ByteReader<'self> {
   }
 
   pub fn read_u32_le(&mut self) -> u32 {
-    assert!(self.has_bytes(4));
+    sanity!(self.has_bytes(4));
     let a = self.read_byte() as u32;
     let b = self.read_byte() as u32;
     let c = self.read_byte() as u32;
@@ -88,7 +89,7 @@ impl<'self> ByteReader<'self> {
   }
 
   pub fn read_u16_le(&mut self) -> u16 {
-    assert!(self.has_bytes(2));
+    sanity!(self.has_bytes(2));
     let a = self.read_byte() as u16;
     let b = self.read_byte() as u16;
 
