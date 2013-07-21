@@ -30,12 +30,12 @@ impl ToStr for Error {
               and its inverse %016s (%u)",
           len.to_str_radix(2), len as uint, nlen.to_str_radix(2), nlen as uint),
       ReferenceBeforeStart(dist, len, out_yet) =>
-        fmt!("Reference to distance %u (len %u), only %u output yet",
+        fmt!("Reference to distance %u (len %u), only %u bytes of output yet",
           dist, len, out_yet),
       ReferenceOutOfWindow(dist, len, win_len) =>
         fmt!("Reference to distance %u (len %u), window only %u",
           dist, len, win_len),
-      MetaCopyAtStart =>
+      MetaCopyAtStart() =>
         fmt!("Meta copy code at start"),
       MetaRepeatTooLong(len_to_repeat, repeat_count, max_repeat_count) =>
         fmt!("Meta code repeating %u had length %u, maximum %u",

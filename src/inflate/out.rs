@@ -81,8 +81,8 @@ impl Output {
           self.pos - dist
         };
 
-      // TODO: the `for` causes "error: cannot move out of captured outer variable"
-      // for len.times {
+      // TODO: the `for` causes "error: cannot move out of captured outer variable" (recv)
+      //for len.times {
       let mut i = 0;
       while i < len {
         i = i + 1;

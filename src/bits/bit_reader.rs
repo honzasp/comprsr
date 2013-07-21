@@ -26,6 +26,11 @@ impl<'self> BitReader<'self> {
     bit_buf
   }
 
+  pub fn close_to_rest(self) -> &'self [u8] {
+    sanity!(self.bit_buf.bits < 8);
+    self.rest_bytes
+  }
+
   pub fn close(self) -> (BitBuf, &'self [u8]) {
     let BitReader { bit_buf, rest_bytes } = self;
     (bit_buf, rest_bytes)

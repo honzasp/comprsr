@@ -6,22 +6,21 @@ pub struct VerbState {
   priv phase: VerbPhase,
   priv len: u16,
   priv nlen: u16,
-  priv remaining: uint,
 }
 
 enum VerbPhase {
-  BeginPhase,
-  LenPhase,
-  NLenPhase,
-  BeginDataPhase,
-  DataPhase,
-  EndPhase,
+  BeginPhase(),
+  LenPhase(),
+  NLenPhase(),
+  BeginDataPhase(),
+  DataPhase(uint),
+  EndPhase(),
   ErrorPhase(~error::Error),
 }
 
 impl VerbState {
   pub fn new() -> VerbState {
-    VerbState { phase: BeginPhase, len: 0, nlen: 0, remaining: 0 }
+    VerbState { phase: BeginPhase, len: 0, nlen: 0 }
   }
 
   pub fn input <R: bits::recv::Recv<u8>> (
@@ -36,43 +35,45 @@ impl VerbState {
     let mut recv = recv;
 
     loop {
-      let res = match st.phase {
-        BeginPhase => {
+      let (continue, next_phase) = match st.phase {
+        BeginPhase() => {
           bit_reader.skip_to_byte();
-          Some(LenPhase)
+          (true, LenPhase)
         },
-        LenPhase => {
+        LenPhase() => {
           if bit_reader.has_bytes(2) { 
             st.len = bit_reader.read_u16();
-            Some(NLenPhase)
-          } else { None }
+            (true, NLenPhase)
+          } else { 
+            (false, LenPhase)
+          }
         }
-        NLenPhase => {
+        NLenPhase() => {
           if bit_reader.has_bytes(2) {
             st.nlen = bit_reader.read_u16();
-            Some(BeginDataPhase)
-          } else { None }
-        },
-        BeginDataPhase => {
-          if st.len == !st.nlen {
-            st.remaining = st.len as uint;
-            Some(DataPhase)
+            (true, BeginDataPhase)
           } else {
-            Some(ErrorPhase(~error::VerbatimLengthMismatch(st.len, st.nlen)))
+            (false, NLenPhase) 
           }
         },
-        DataPhase => {
-          let chunk = bit_reader.read_byte_chunk(st.remaining);
+        BeginDataPhase() => {
+          if st.len == !st.nlen {
+            (true, DataPhase(st.len as uint))
+          } else {
+            (true, ErrorPhase(~error::VerbatimLengthMismatch(st.len, st.nlen)))
+          }
+        },
+        DataPhase(remaining) => {
+          let chunk = bit_reader.read_byte_chunk(remaining);
           recv = out.send_literal_chunk(chunk, recv);
 
-          if chunk.len() < st.remaining {
-            st.remaining = st.remaining - chunk.len();
-            None
+          if chunk.len() < remaining {
+            (false, DataPhase(remaining - chunk.len()))
           } else {
-            Some(EndPhase)
+            (true, EndPhase)
           }
         },
-        EndPhase => {
+        EndPhase() => {
           return (Right(Ok(())), recv)
         },
         ErrorPhase(err) => {
@@ -80,9 +81,9 @@ impl VerbState {
         }
       };
 
-      match res {
-        None => return (Left(st), recv), 
-        Some(next_phase) => st.phase = next_phase,
+      st.phase = next_phase;
+      if !continue {
+        return (Left(st), recv)
       }
     }
   }

@@ -26,7 +26,7 @@ impl FixedCoder {
 fn read_fixed_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
   if bit_reader.has_bits(7) {
     let rev_prefix = bit_reader.read_bits8(5);
-    let (base,extra_bits) = decode_rev_prefix(rev_prefix as uint);
+    let (base, extra_bits) = decode_rev_prefix(rev_prefix as uint);
 
     if bit_reader.has_bits(extra_bits) {
       let code = base + bit_reader.read_rev_bits8(extra_bits) as uint;
@@ -62,6 +62,7 @@ fn read_fixed_dist_code(bit_reader: &mut bits::BitReader) -> Option<uint> {
 */
 
 fn decode_rev_prefix(rev_prefix: uint) -> (uint, uint) {
+  // TODO: change to static table lookup
   fn rev2(x: uint) -> uint {
     ((x & 0b10) >> 1) | ((x & 0b01) << 1)
   }

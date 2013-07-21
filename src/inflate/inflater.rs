@@ -15,12 +15,12 @@ pub struct Inflater {
 }
 
 enum Stage {
-  HeaderStage,
+  HeaderStage(),
   DynamicHeaderStage(dynamic::HeaderState),
   VerbatimStage(verbatim::VerbState),
   FixedStage(compressed::ComprState<fixed::FixedCoder>),
   DynamicStage(compressed::ComprState<dynamic::DynamicCoder>),
-  EndStage,
+  EndStage(),
   ErrorStage(~error::Error),
 }
 
@@ -42,24 +42,23 @@ impl Inflater {
   {
     // TODO: make a single variable and access its members?
     let Inflater { stage, bit_buf, output, last_block } = self;
-    let i_bit_buf = bit_buf;
-    let mut i_output = output;
-    let mut i_last_block = last_block;
-    let mut i_stage = stage;
+    let mut output = output;
+    let mut last_block = last_block;
+    let mut stage = stage;
 
     let mut recv = recv;
-    let mut bit_reader = bits::BitReader::new(i_bit_buf, chunk);
+    let mut bit_reader = bits::BitReader::new(bit_buf, chunk);
 
     loop {
-      let (continue, new_stage) = match i_stage {
-        HeaderStage if i_last_block => 
+      let (continue, new_stage) = match stage {
+        HeaderStage() if last_block => 
           (true, EndStage),
-        HeaderStage => {
+        HeaderStage() => {
           if bit_reader.has_bits(3) {
             let bfinal = bit_reader.read_bits8(1);
             let btype = bit_reader.read_bits8(2);
 
-            i_last_block = bfinal != 0;
+            last_block = bfinal != 0;
             (true, match btype {
               0b00 => VerbatimStage(verbatim::VerbState::new()),
               0b01 => FixedStage(compressed::ComprState::new(fixed::FixedCoder::new())),
@@ -80,9 +79,8 @@ impl Inflater {
               (true, DynamicStage(compressed::ComprState::new(dyn_coder))),
           }
         },
-        // TODO: make it dryer!
         VerbatimStage(verb_state) => {
-          let (res, new_recv) = verb_state.input(&mut bit_reader, i_output, recv);
+          let (res, new_recv) = verb_state.input(&mut bit_reader, output, recv);
           recv = new_recv;
           match res {
             Left(new_state) => (false, VerbatimStage(new_state)),
@@ -91,7 +89,7 @@ impl Inflater {
           }
         },
         FixedStage(compr_state) => {
-          let (res, new_recv) = compr_state.input(&mut bit_reader, i_output, recv);
+          let (res, new_recv) = compr_state.input(&mut bit_reader, output, recv);
           recv = new_recv;
           match res {
             Left(new_state) => (false, FixedStage(new_state)),
@@ -100,7 +98,7 @@ impl Inflater {
           }
         },
         DynamicStage(compr_state) => {
-          let (res, new_recv) = compr_state.input(&mut bit_reader, i_output, recv);
+          let (res, new_recv) = compr_state.input(&mut bit_reader, output, recv);
           recv = new_recv;
           match res {
             Left(new_state) => (false, DynamicStage(new_state)),
@@ -108,23 +106,21 @@ impl Inflater {
             Right(Err(err)) => (true, ErrorStage(err)),
           }
         },
-        EndStage => {
-          let (_bit_buf, rest_bytes) = bit_reader.close();
-          return (Right((Ok(()), rest_bytes)), recv)
+        EndStage() => {
+          return (Right((Ok(()), bit_reader.close_to_rest())), recv)
         },
         ErrorStage(err) => {
-          let (_bit_buf, rest_bytes) = bit_reader.close();
-          return (Right((Err(err), rest_bytes)), recv)
+          return (Right((Err(err), bit_reader.close_to_rest())), recv)
         },
       };
 
-      i_stage = new_stage;
+      stage = new_stage;
       if !continue { 
         return (Left(Inflater {
-          stage: i_stage,
+          stage: stage,
           bit_buf: bit_reader.close_to_buf(),
-          output: i_output,
-          last_block: i_last_block
+          output: output,
+          last_block: last_block
         }), recv)
       }
     }

@@ -17,13 +17,13 @@ pub struct HeaderState {
 }
 
 enum HeaderPhase {
-  NumbersPhase,
-  MetaLensPhase,
-  MetaPhase,
-  CodeLensPhase,
+  NumbersPhase(),
+  MetaLensPhase(),
+  MetaPhase(),
+  CodeLensPhase(),
   CodeLensRepeatPhase(u8, uint, uint),
   ErrorPhase(~error::Error),
-  EndPhase,
+  EndPhase(),
 }
 
 #[deriving(Eq)]
@@ -61,9 +61,8 @@ impl HeaderState {
     let mut st = self;
 
     loop {
-      // TODO: break the match into methods on &mut self
-      let res = match st.phase {
-        NumbersPhase => {
+      let (continue, next_phase) = match st.phase {
+        NumbersPhase() => {
           if bit_reader.has_bits(14) {
             let hlit = bit_reader.read_bits8(5);
             let hdist = bit_reader.read_bits8(5);
@@ -76,63 +75,62 @@ impl HeaderState {
 
             st.meta_lens.reserve(st.meta_count);
             st.code_lens.reserve(st.code_count);
-            Some(MetaLensPhase)
+            (true, MetaLensPhase)
           } else {
-            None
+            (false, NumbersPhase)
           }
         },
-        MetaLensPhase => {
+        MetaLensPhase() => {
           while st.meta_lens.len() < st.meta_count && bit_reader.has_bits(3) {
             let len = bit_reader.read_bits8(3);
             st.meta_lens.push(len);
           }
 
           if st.meta_lens.len() >= st.meta_count {
-            Some(MetaPhase)
+            (true, MetaPhase)
           } else {
-            None
+            (false, MetaLensPhase)
           }
         },
-        MetaPhase => {
+        MetaPhase() => {
           // TODO: make the zip nicer
           let mut meta_code_lens = ~[0, ..19];
-          for st.meta_lens.iter().zip(meta_len_order.iter()).advance 
-            |(&len, &code)|
-          {
+          for st.meta_lens.iter().zip(meta_len_order.iter()).advance |(&len, &code)| {
             meta_code_lens[code] = len;
           }
 
           match huff::Tree::new_from_lens(meta_code_lens) {
             Ok(tree) => {
               st.meta_tree = ~tree;
-              Some(CodeLensPhase)
+              (true, CodeLensPhase)
             },
-            Err(err) => Some(ErrorPhase(err)),
+            Err(err) =>
+              (true, ErrorPhase(err)),
           }
         },
-        CodeLensPhase => 
+        CodeLensPhase() => 
           if st.code_lens.len() < st.code_count {
             match read_huff_code(bit_reader, st.meta_tree) {
               Some(code) => match decode_meta(code) {
                 Ok(LiteralMetaCode(len)) => {
                   st.code_lens.push(len);
-                  Some(CodeLensPhase)
+                  (true, CodeLensPhase)
                 },
                 Ok(CopyMetaCode(count_base, count_extra_bits)) =>
                   match st.code_lens.last_opt() {
                     Some(&last_code) =>
-                      Some(CodeLensRepeatPhase(last_code, count_base, count_extra_bits)),
+                      (true, CodeLensRepeatPhase(last_code, count_base, count_extra_bits)),
                     None =>
-                      Some(ErrorPhase(~error::MetaCopyAtStart)),
+                      (true, ErrorPhase(~error::MetaCopyAtStart)),
                   },
                 Ok(ZeroesMetaCode(count_base, count_extra_bits)) =>
-                  Some(CodeLensRepeatPhase(0, count_base, count_extra_bits)),
-                Err(err) => Some(ErrorPhase(err)),
+                  (true, CodeLensRepeatPhase(0, count_base, count_extra_bits)),
+                Err(err) => (true, ErrorPhase(err)),
               },
-              None => None,
+              None => (false, CodeLensPhase),
             }
           } else {
-            Some(EndPhase)
+            (true, EndPhase)
           },
         CodeLensRepeatPhase(len_to_repeat, count_base, count_extra_bits) =>
           if bit_reader.has_bits(count_extra_bits) {
@@ -143,27 +141,27 @@ impl HeaderState {
               for repeat_count.times() {
                 st.code_lens.push(len_to_repeat);
               }
-              Some(CodeLensPhase)
+              (true, CodeLensPhase)
             } else {
               let err = ~error::MetaRepeatTooLong(
                   len_to_repeat, repeat_count, st.code_count - st.code_lens.len()
                 );
-              Some(ErrorPhase(err))
+              (true, ErrorPhase(err))
             }
           } else {
-            None
+            (false, CodeLensRepeatPhase(len_to_repeat, count_base, count_extra_bits))
           },
-        EndPhase => {
+        EndPhase() => {
           // TODO: add MakeTreePhase and make EndPhase lightweight 
           let litlen_slice = st.code_lens.slice(0, st.litlen_count);
           let dist_slice = st.code_lens.slice(st.litlen_count,
               st.litlen_count + st.dist_count);
 
           match huff::Tree::new_from_lens(litlen_slice) {
-            Err(err) => Some(ErrorPhase(err)),
+            Err(err) => (true, ErrorPhase(err)),
             Ok(litlen_tree) => {
               match huff::Tree::new_from_lens(dist_slice) {
-                Err(err) => Some(ErrorPhase(err)),
+                Err(err) => (true, ErrorPhase(err)),
                 Ok(dist_tree) => {
                   let coder = DynamicCoder {
                     litlen_tree: ~litlen_tree,
@@ -180,9 +178,9 @@ impl HeaderState {
         },
       };
 
-      match res {
-        None => return Left(st),
-        Some(next_phase) => st.phase = next_phase,
+      st.phase = next_phase;
+      if !continue {
+        return Left(st)
       }
     }
   }

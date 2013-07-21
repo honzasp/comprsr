@@ -3,19 +3,19 @@ use inflate::error;
 use inflate::out;
 
 pub enum CompressedPhase {
-  LitlenPhase,
+  LitlenPhase(),
   LenExtraPhase(uint,uint), /* (base_len,extra_bits) */
   DistPhase(uint), /* (len) */
   DistExtraPhase(uint,uint,uint), /* (len,base_dist,extra_bits) */
   ErrorPhase(~error::Error),
-  EndPhase,
+  EndPhase(),
 }
 
 #[deriving(Eq)]
 pub enum LitlenCode {
   LiteralCode(u8),
   LengthCode(uint, uint),
-  BlockEndCode,
+  BlockEndCode(),
 }
 
 pub struct ComprState<C> {
@@ -50,45 +50,45 @@ impl<C: Coder> ComprState<C> {
     let mut recv = recv;
 
     loop {
-      let res = match st.phase {
-        LitlenPhase => {
+      let (continue, next_phase) = match st.phase {
+        LitlenPhase() => {
           match st.coder.read_litlen_code(bit_reader) {
             Some(code) => match decode_litlen(code) {
                 Ok(litlen) => match litlen {
                   LiteralCode(byte) => {
                     recv = out.send_literal(byte, recv);
-                    Some(LitlenPhase)
+                    (true, LitlenPhase)
                   },
                   LengthCode(len, 0) =>
-                    Some(DistPhase(len)),
+                    (true, DistPhase(len)),
                   LengthCode(len_base, len_extra_bits) =>
-                    Some(LenExtraPhase(len_base, len_extra_bits)),
-                  BlockEndCode => 
-                    Some(EndPhase)
+                    (true, LenExtraPhase(len_base, len_extra_bits)),
+                  BlockEndCode() => 
+                    (true, EndPhase)
                 },
                 Err(err) =>
-                  Some(ErrorPhase(err))
+                  (true, ErrorPhase(err))
               },
-            None => None,
+            None => (false, LitlenPhase),
           }
         },
         LenExtraPhase(len_base, len_extra_bits) => {
           if bit_reader.has_bits(len_extra_bits) {
             let extra = bit_reader.read_bits8(len_extra_bits);
-            Some(DistPhase(len_base + extra as uint))
+            (true, DistPhase(len_base + extra as uint))
           } else {
-            None
+            (false, LenExtraPhase(len_base, len_extra_bits))
           }
         },
         DistPhase(len) => {
           match st.coder.read_dist_code(bit_reader) {
             Some(dist_code) => match decode_dist(dist_code) {
               Ok((dist_base, dist_extra_bits)) =>
-                Some(DistExtraPhase(len, dist_base, dist_extra_bits)),
+                (true, DistExtraPhase(len, dist_base, dist_extra_bits)),
               Err(err) =>
-                Some(ErrorPhase(err)),
+                (true, ErrorPhase(err)),
             },
-            None => None,
+            None => (false, DistPhase(len)),
           }
         },
         DistExtraPhase(len, dist_base, dist_extra_bits) => {
@@ -98,15 +98,14 @@ impl<C: Coder> ComprState<C> {
             let (res, new_recv) = out.back_reference(dist, len, recv);
             recv = new_recv;
             match res {
-              Ok(()) => Some(LitlenPhase),
-              Err(err) => Some(ErrorPhase(err)),
+              Ok(()) =>(true, LitlenPhase),
+              Err(err) =>(true, ErrorPhase(err)),
             }
           } else {
-            None
+            (false, DistExtraPhase(len, dist_base, dist_extra_bits))
           }
         },
-        EndPhase => {
-          // TODO: how to dry the flush?
+        EndPhase() => {
           return (Right(Ok(())), out.flush(recv))
         },
         ErrorPhase(err) => {
@@ -114,9 +113,9 @@ impl<C: Coder> ComprState<C> {
         },
       };
 
-      match res {
-        None => return (Left(st), out.flush(recv)),
-        Some(next_phase) => st.phase = next_phase,
+      st.phase = next_phase;
+      if !continue {
+        return (Left(st), out.flush(recv))
       }
     }
   }
