@@ -11,7 +11,7 @@ ALL_BENCHS   = $(shell find src -name '*.rc' | sed 's/src\/comprsr_\([a-zA-Z0-9]
 
 SOURCES      = $(shell find . -name '*.rc' -o -name '*.rs' -o -name '*.rb')
 
-.PHONY: all all_tests unit_tests benchmarks func_tests clean loc todo
+.PHONY: all all_tests unit_tests benchmarks func_tests clean loc todo sources
 
 all: $(ALL_DUMMIES)
 
@@ -43,6 +43,10 @@ loc:
 
 todo:
 	@grep -n TODO -- $(SOURCES) | sed 's/ \+/ /'
+
+# useful for grepping etc. (`make sources | xargs grep ...`)
+sources:
+	@echo $(SOURCES)
 
 libcomprsr_zlib.dummy testcomprsr_zlib~: libcomprsr_inflate.dummy libcomprsr_checksums.dummy libcomprsr_bits.dummy
 
