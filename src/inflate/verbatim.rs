@@ -148,21 +148,6 @@ mod test {
       ), &[]));
   }
 
-  /* TODO: this isn't possible with Receivers
-  #[test]
-  fn test_inflate_verbatim_chunks() {
-    let mut buf: ~[u8] = ~[];
-    let mut inflater = inflater::Inflater::new(&mut buf);
-
-    inflater.input(&[0b00000_000, 0b00001010]);
-    assert!(buf.is_empty());
-    inflater.input(&[0b00000000, 0b11110101, 0b11111111]);
-    assert!(buf.is_empty());
-    inflater.input(&[10,20,30,40,50]);
-    assert_eq!(&buf, &~[10,20,30,40,50]);
-  }
-  */
-
   #[bench]
   fn bench_verbatim(b: &mut test::BenchHarness) {
     fn gen_verb_block<R: rand::Rng>(

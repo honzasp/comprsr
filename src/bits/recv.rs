@@ -36,7 +36,7 @@ impl<X> Recv<X> for () {
   }
 }
 
-/* TODO: this should be fine, but Rust (0.7) complains about conflicting implementations
+/*
 impl<X, I: num::NumCast + ops::Add<I, I>> Recv<X> for I {
   pub fn receive(self, xs: &[X]) -> I {
     self + num::NumCast::from(xs.len())

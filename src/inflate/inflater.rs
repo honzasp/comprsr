@@ -40,7 +40,6 @@ impl Inflater {
     (self, chunk: &'a [u8], recv: R)
     -> (Either<Inflater, (Result<(), ~error::Error>, &'a [u8])>, R)
   {
-    // TODO: make a single variable and access its members?
     let Inflater { stage, bit_buf, output, last_block } = self;
     let mut output = output;
     let mut last_block = last_block;

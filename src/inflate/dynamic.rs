@@ -152,7 +152,6 @@ impl HeaderState {
             (false, CodeLensRepeatPhase(len_to_repeat, count_base, count_extra_bits))
           },
         EndPhase() => {
-          // TODO: add MakeTreePhase and make EndPhase lightweight 
           let litlen_slice = st.code_lens.slice(0, st.litlen_count);
           let dist_slice = st.code_lens.slice(st.litlen_count,
               st.litlen_count + st.dist_count);

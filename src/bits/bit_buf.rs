@@ -1,4 +1,4 @@
-// TODO: change assert! to sanity! (and disable those checks in "production" code)
+mod sanity;
 
 pub struct BitBuf {
   buf: u32,
@@ -12,7 +12,7 @@ impl BitBuf {
 
   #[inline]
   pub fn shift_bits(&mut self, bits: uint) -> u32 {
-    assert!(bits <= self.bits);
+    sanity!(bits <= self.bits);
     let ret = self.buf & !(!0 << bits);
     self.buf = self.buf >> bits;
     self.bits = self.bits - bits;
@@ -21,14 +21,14 @@ impl BitBuf {
 
   #[inline]
   pub fn unshift_bits(&mut self, bits: uint, data: u32) {
-    assert!(bits + self.bits <= 32);
+    sanity!(bits + self.bits <= 32);
     self.buf = (self.buf << bits) | data;
     self.bits = self.bits + bits;
   }
 
   #[inline]
   pub fn push_byte(&mut self, byte: u8) {
-    assert!(self.bits + 8 <= 32);
+    sanity!(self.bits + 8 <= 32);
     self.buf = self.buf | (byte as u32 << self.bits);
     self.bits = self.bits + 8;
   }
@@ -39,5 +39,3 @@ impl BitBuf {
     self.bits = 0;
   }
 }
-
-// TODO: add tests?

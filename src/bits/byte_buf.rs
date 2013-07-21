@@ -1,4 +1,4 @@
-// TODO: add sanity! checks
+mod sanity;
 
 #[deriving(Clone)]
 pub struct ByteBuf {
@@ -19,6 +19,7 @@ impl ByteBuf {
   }
 
   pub fn shift_byte(&mut self) -> u8 {
+    sanity!(self.buf.len() > 0);
     self.buf.shift()
   }
 
