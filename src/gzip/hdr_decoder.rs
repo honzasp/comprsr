@@ -318,7 +318,6 @@ mod test {
     }
 
     { // set mtime, system and extra flags
-
       assert_eq!(decode_hdr_ok(&[
           0x1f, 0x8b, 0x08, 0x00,
           0x21, 0x43, 0x65, 0x87,
@@ -327,6 +326,17 @@ mod test {
           h.extra_flags = 0xab;
           h.mtime = Some(0x87654321);
           h.system = Some(header::Amiga);
+        }
+      );
+    }
+
+    { // undefined system number
+      assert_eq!(decode_hdr_ok(&[
+          0x1f, 0x8b, 0x08, 0x00,
+          0x00, 0x00, 0x00, 0x00,
+          0x00, 42,
+        ]), do header |h| {
+          h.system = Some(header::Undefined(42));
         }
       );
     }

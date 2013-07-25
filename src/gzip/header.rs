@@ -20,20 +20,21 @@ pub struct Extra {
 
 #[deriving(Eq, Clone)]
 pub enum System {
-  FAT,
-  Amiga,
-  VMS,
-  Unix,
-  VM_CMS,
-  AtariTOS,
-  HPFS,
-  Macintosh,
-  ZSystem,
-  CP_M,
-  TOPS_20,
-  NTFS,
-  QDOS,
-  AcornRISCOS
+  FAT(),
+  Amiga(),
+  VMS(),
+  Unix(),
+  VM_CMS(),
+  AtariTOS(),
+  HPFS(),
+  Macintosh(),
+  ZSystem(),
+  CP_M(),
+  TOPS_20(),
+  NTFS(),
+  QDOS(),
+  AcornRISCOS(),
+  Undefined(u8),
 }
 
 impl Header {
@@ -125,7 +126,8 @@ impl System {
       11 => Some(NTFS),
       12 => Some(QDOS),
       13 => Some(AcornRISCOS),
-      _ => None
+      255 => None,
+      other => Some(Undefined(other)),
     }
   }
 
@@ -146,6 +148,7 @@ impl System {
         NTFS => 11,
         QDOS => 12,
         AcornRISCOS => 13,
+        Undefined(x) => x,
       },
       None => 255
     }
@@ -176,6 +179,7 @@ impl ToStr for System {
       NTFS => ~"NTFS filesystem (NT)",
       QDOS => ~"QDOS",
       AcornRISCOS => ~"Acorn RISCOS",
+      Undefined(x) => fmt!("Undefined system %u", x as uint),
     }
   }
 }
