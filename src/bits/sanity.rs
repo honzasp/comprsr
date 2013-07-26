@@ -16,6 +16,6 @@ mod live_sanity {
 #[macro_escape]
 mod dead_sanity {
   macro_rules! sanity(
-    ($cond:expr) => ( ; )
+    ($cond:expr) => ( { } )
   )
 }
