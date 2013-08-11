@@ -1,5 +1,5 @@
 RUSTC = rustc
-RUSTC_FLAGS         = -L . -A non-uppercase-statics
+RUSTC_FLAGS         = -L . -A non-uppercase-statics -O
 RUSTC_TEST_FLAGS    = $(RUSTC_FLAGS) 
 RUSTC_COMPILE_FLAGS = $(RUSTC_FLAGS)
 
